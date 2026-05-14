@@ -16,11 +16,10 @@ Gebruik het menu links om te navigeren:
   Dagelijkse staafdiagrammen per maand + heatmap.
 
 - **Vergelijking 2026 vs 2025**  
-  Dagelijkse vergelijking per maand + verschil‑heatmap.
+  Dagelijkse vergelijking per maand + verschil-heatmap.
 
 - **Statistieken 2026 vs 2025**  
   Jaar-, maand- en seizoensstatistieken.
 """)
 
 st.info("Selecteer een pagina in het menu links om te beginnen.")
-
