@@ -14,11 +14,11 @@ def load_rr(year):
         df = pd.read_excel(excel_path)
         df.to_csv(csv_path, index=False)
 
-    # 3. Geen data gevonden → foutmelding voor gebruiker
+    # 3. Geen data gevonden → foutmelding
     else:
         raise FileNotFoundError(
             f"Geen data gevonden voor jaar {year}. "
-            f"Upload CSV of Excel in de map /data."
+            f"Upload Rainfall_Data_Suriname_{year}.xlsx in /data."
         )
 
     # Datumkolom verwerken
