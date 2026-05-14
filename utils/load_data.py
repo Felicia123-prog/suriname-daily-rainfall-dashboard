@@ -21,7 +21,7 @@ def load_rr(year):
             colmap = {}
 
             for c in temp.columns:
-                cl = c.lower()
+                cl = c.lower().strip()
 
                 # Datum
                 if cl in ["date", "datum", "obsdatetime", "datetime"]:
