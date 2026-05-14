@@ -3,15 +3,23 @@ from utils.load_data import load_rr
 from utils.seasons import assign_season
 import pandas as pd
 
+# ---------------------------------------------------------
+# PAGINA CONFIG
+# ---------------------------------------------------------
 st.set_page_config(
     page_title="Suriname Rainfall & Climate Dashboard",
     layout="wide"
 )
 
+# ---------------------------------------------------------
+# TITEL
+# ---------------------------------------------------------
 st.title("🌧️ Suriname Rainfall & Climate Dashboard")
 st.write("Analyse van dagelijkse neerslag voor 2026 en vergelijking met 2025.")
 
-# --- Dropdowns ---
+# ---------------------------------------------------------
+# DROPDOWNS
+# ---------------------------------------------------------
 col1, col2 = st.columns(2)
 
 with col1:
@@ -20,12 +28,24 @@ with col1:
 with col2:
     month = st.selectbox("Kies maand", list(range(1, 13)))
 
-# --- Data laden ---
+# ---------------------------------------------------------
+# DATA LADEN
+# ---------------------------------------------------------
 df = load_rr(year)
 df["season"] = df.apply(assign_season, axis=1)
-df_month = df[df["month"] == month]
 
-# --- Introductieblok ---
+df_month = df[df["month"] == month].copy()
+
+# Als RR ontbreekt → maak hem 0
+if "RR" not in df_month.columns:
+    df_month["RR"] = 0
+
+# RR numeriek maken (veilig)
+df_month["RR"] = pd.to_numeric(df_month["RR"], errors="coerce").fillna(0)
+
+# ---------------------------------------------------------
+# INTRODUCTIE
+# ---------------------------------------------------------
 st.markdown("""
 ### 📘 Over dit dashboard
 Dit dashboard helpt je om:
@@ -37,7 +57,9 @@ Dit dashboard helpt je om:
 Gebruik het menu links om naar de detailpagina’s te gaan.
 """)
 
-# --- Statistieken preview ---
+# ---------------------------------------------------------
+# SNELLE STATISTIEKEN
+# ---------------------------------------------------------
 st.markdown(f"### 📊 Snelle statistieken voor **{year} – maand {month}**")
 
 colA, colB, colC, colD = st.columns(4)
@@ -54,16 +76,23 @@ with colC:
 with colD:
     st.metric("Zware dagen (≥50mm)", int((df_month["RR"] >= 50).sum()))
 
-# --- Seizoen info ---
+# ---------------------------------------------------------
+# SEIZOEN INFO
+# ---------------------------------------------------------
 st.markdown("### 🌦️ Seizoen van deze maand")
 
-season_name = df_month["season"].iloc[0] if len(df_month) > 0 else "Onbekend"
+if len(df_month) > 0:
+    season_name = df_month["season"].iloc[0]
+else:
+    season_name = "Onbekend"
 
 st.info(f"**{season_name}** — volgens de tropische seizoensindeling van Suriname.")
 
-# --- Footer ---
+# ---------------------------------------------------------
+# FOOTER
+# ---------------------------------------------------------
 st.markdown("""
 ---
-📍 *Data: Dagelijkse neerslagmetingen Suriname (Hydromet)*  
+📍 *Data: Dagelijkse neerslagmetingen Suriname (Hydromet, NOAA, LVT, Volunteer, CLIMSOFT)*  
 📅 *Jaren: 2025 & 2026*  
 """)
