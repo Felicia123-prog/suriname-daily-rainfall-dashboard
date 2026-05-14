@@ -1,5 +1,6 @@
 import pandas as pd
 import os
+import numpy as np
 
 def load_rr(year):
     csv_path = f"data/rr_{year}.csv"
@@ -27,8 +28,10 @@ def load_rr(year):
                 if cl in ["date", "datum", "obsdatetime", "datetime"]:
                     colmap[c] = "date"
 
-                # Neerslag
-                if cl in ["rainfall (mm)", "rainfall", "rr", "rain", "precip", "rain_mm"]:
+                # Neerslag (alle varianten)
+                if any(x in cl for x in [
+                    "rain", "rr", "precip", "rainfall", "mm"
+                ]):
                     colmap[c] = "RR"
 
                 # Latitude
@@ -52,6 +55,22 @@ def load_rr(year):
             frames.append(temp)
 
         df = pd.concat(frames, ignore_index=True)
+
+        # --- RR numeriek maken ---
+        df["RR"] = (
+            df["RR"]
+            .astype(str)
+            .str.replace(",", ".", regex=False)
+            .str.replace("mm", "", regex=False)
+            .str.replace("MM", "", regex=False)
+            .str.replace("—", "0", regex=False)
+            .str.replace("-", "0", regex=False)
+            .str.replace("trace", "0", case=False, regex=False)
+            .str.replace("t", "0", case=False, regex=False)
+            .str.strip()
+        )
+
+        df["RR"] = pd.to_numeric(df["RR"], errors="coerce").fillna(0)
 
         # CSV opslaan
         df.to_csv(csv_path, index=False)
