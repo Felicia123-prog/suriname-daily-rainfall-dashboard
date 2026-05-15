@@ -3,11 +3,11 @@ import os
 import re
 
 def clean_rain_value(x):
-    """Maakt elke neerslagwaarde veilig numeriek."""
-    if pd.isna(x):
+    """Zet elke neerslagwaarde om naar een veilig numeriek getal."""
+    try:
+        s = str(x).strip().lower()
+    except:
         return 0
-
-    s = str(x).strip().lower()
 
     if s in ["", "-", "—", "na", "none", "nan"]:
         return 0
@@ -27,6 +27,7 @@ def load_rr(year):
     csv_path = f"data/rr_{year}.csv"
     excel_path = f"data/Rainfall_Data_Suriname_{year}.xlsx"
 
+    # Gebruik CSV als die bestaat
     if os.path.exists(csv_path) and os.path.getsize(csv_path) > 10:
         df = pd.read_csv(csv_path)
 
@@ -37,33 +38,34 @@ def load_rr(year):
         for sheet in xls.sheet_names:
             temp = pd.read_excel(excel_path, sheet_name=sheet)
 
-            colmap = {}
-            for c in temp.columns:
-                cl = c.lower().strip()
+            # Alleen deze kolommen gebruiken als ze bestaan
+            expected = ["Date", "Rainfall (mm)", "Latitude", "Longitude", "StationID"]
+            available = [c for c in expected if c in temp.columns]
 
-                if cl in ["date", "datum", "obsdatetime", "datetime"]:
-                    colmap[c] = "date"
-                if any(x in cl for x in ["rain", "rr", "precip", "rainfall", "mm"]):
-                    colmap[c] = "RR"
-                if cl in ["latitude", "lat"]:
-                    colmap[c] = "Latitude"
-                if cl in ["longitude", "lon", "long"]:
-                    colmap[c] = "Longitude"
-                if cl in ["stationid", "station", "station_id"]:
-                    colmap[c] = "StationID"
+            # Sheet overslaan als hij geen neerslagkolom heeft
+            if "Rainfall (mm)" not in temp.columns:
+                continue
 
-            temp = temp.rename(columns=colmap)
+            temp = temp[available].copy()
 
-            keep = [c for c in ["date", "RR", "Latitude", "Longitude", "StationID"] if c in temp.columns]
-            temp = temp[keep]
+            # Hernoemen
+            rename_map = {
+                "Date": "date",
+                "Rainfall (mm)": "RR",
+                "Latitude": "Latitude",
+                "Longitude": "Longitude",
+                "StationID": "StationID"
+            }
+            temp = temp.rename(columns=rename_map)
 
             frames.append(temp)
 
+        if not frames:
+            raise ValueError("Geen enkele sheet bevat 'Rainfall (mm)'.")
+
         df = pd.concat(frames, ignore_index=True)
 
-        if "RR" not in df.columns:
-            df["RR"] = 0
-
+        # RR numeriek maken
         df["RR"] = df["RR"].apply(clean_rain_value)
 
         df.to_csv(csv_path, index=False)
@@ -73,6 +75,7 @@ def load_rr(year):
             f"Geen data gevonden voor jaar {year}. Upload Rainfall_Data_Suriname_{year}.xlsx in /data."
         )
 
+    # Datum verwerken
     df["date"] = pd.to_datetime(df["date"], errors="coerce")
     df = df.dropna(subset=["date"])
 
