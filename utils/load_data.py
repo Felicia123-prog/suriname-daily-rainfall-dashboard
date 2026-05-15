@@ -28,9 +28,7 @@ def load_rr(year):
                     colmap[c] = "date"
 
                 # Neerslag (alle varianten)
-                if any(x in cl for x in [
-                    "rain", "rr", "precip", "rainfall", "mm"
-                ]):
+                if any(x in cl for x in ["rain", "rr", "precip", "rainfall", "mm"]):
                     colmap[c] = "RR"
 
                 # Latitude
@@ -59,10 +57,10 @@ def load_rr(year):
         if "RR" not in df.columns:
             df["RR"] = 0
 
-        # Eerst ALLES naar string
+        # Stap 1: altijd naar string
         df["RR"] = df["RR"].astype(str)
 
-        # Dan schoonmaken
+        # Stap 2: schoonmaken (werkt nu ALTIJD)
         df["RR"] = (
             df["RR"]
             .str.replace(",", ".", regex=False)
@@ -75,7 +73,7 @@ def load_rr(year):
             .str.strip()
         )
 
-        # Numeriek maken
+        # Stap 3: numeriek maken
         df["RR"] = pd.to_numeric(df["RR"], errors="coerce").fillna(0)
 
         # CSV opslaan
