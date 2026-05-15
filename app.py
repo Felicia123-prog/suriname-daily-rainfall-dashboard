@@ -1,98 +1,87 @@
 import streamlit as st
+import pandas as pd
+import plotly.express as px
 from utils.load_data import load_rr
 from utils.seasons import assign_season
-import pandas as pd
 
-# ---------------------------------------------------------
-# PAGINA CONFIG
-# ---------------------------------------------------------
-st.set_page_config(
-    page_title="Suriname Rainfall & Climate Dashboard",
-    layout="wide"
-)
+st.set_page_config(page_title="Suriname Rainfall Comparison", layout="wide")
 
-# ---------------------------------------------------------
-# TITEL
-# ---------------------------------------------------------
-st.title("🌧️ Suriname Rainfall & Climate Dashboard")
-st.write("Analyse van dagelijkse neerslag voor 2026 en vergelijking met 2025.")
+st.title("🌧️ Dagelijkse Neerslag Vergelijking — Suriname")
+st.write("Vergelijk dagelijkse neerslag tussen 2025 en 2026 per maand.")
 
-# ---------------------------------------------------------
-# DROPDOWNS
-# ---------------------------------------------------------
+# -----------------------------
+# MAAND SELECTIE
+# -----------------------------
+month_names = {
+    1: "Januari", 2: "Februari", 3: "Maart", 4: "April",
+    5: "Mei", 6: "Juni", 7: "Juli", 8: "Augustus",
+    9: "September", 10: "Oktober", 11: "November", 12: "December"
+}
+
+month = st.selectbox("Kies maand:", list(month_names.keys()), format_func=lambda x: month_names[x])
+
+# -----------------------------
+# DATA LADEN
+# -----------------------------
+df_2026 = load_rr(2026)
+df_2025 = load_rr(2025)
+
+df_2026["season"] = df_2026.apply(assign_season, axis=1)
+df_2025["season"] = df_2025.apply(assign_season, axis=1)
+
+# Filter op maand
+df_2026_m = df_2026[df_2026["month"] == month]
+df_2025_m = df_2025[df_2025["month"] == month]
+
+# -----------------------------
+# STATISTIEKEN
+# -----------------------------
+colA, colB = st.columns(2)
+
+with colA:
+    st.subheader(f"📊 Statistieken — 2026 ({month_names[month]})")
+    st.metric("Totaal (mm)", round(df_2026_m["RR"].sum(), 1))
+    st.metric("Gemiddelde (mm/dag)", round(df_2026_m["RR"].mean(), 2))
+    st.metric("Natte dagen (≥1mm)", int((df_2026_m["RR"] >= 1).sum()))
+    st.metric("Zware dagen (≥50mm)", int((df_2026_m["RR"] >= 50).sum()))
+
+with colB:
+    st.subheader(f"📊 Statistieken — 2025 ({month_names[month]})")
+    st.metric("Totaal (mm)", round(df_2025_m["RR"].sum(), 1))
+    st.metric("Gemiddelde (mm/dag)", round(df_2025_m["RR"].mean(), 2))
+    st.metric("Natte dagen (≥1mm)", int((df_2025_m["RR"] >= 1).sum()))
+    st.metric("Zware dagen (≥50mm)", int((df_2025_m["RR"] >= 50).sum()))
+
+# -----------------------------
+# GRAFIEKEN NAAST ELKAAR
+# -----------------------------
 col1, col2 = st.columns(2)
 
 with col1:
-    year = st.selectbox("Kies jaar", [2026, 2025])
+    st.subheader(f"📅 Dagelijkse neerslag — 2026 ({month_names[month]})")
+    fig1 = px.bar(
+        df_2026_m,
+        x="day",
+        y="RR",
+        labels={"day": "Dag", "RR": "Neerslag (mm)"},
+        title=f"2026 — {month_names[month]}"
+    )
+    st.plotly_chart(fig1, use_container_width=True)
 
 with col2:
-    month = st.selectbox("Kies maand", list(range(1, 13)))
+    st.subheader(f"📅 Dagelijkse neerslag — 2025 ({month_names[month]})")
+    fig2 = px.bar(
+        df_2025_m,
+        x="day",
+        y="RR",
+        labels={"day": "Dag", "RR": "Neerslag (mm)"},
+        title=f"2025 — {month_names[month]}"
+    )
+    st.plotly_chart(fig2, use_container_width=True)
 
-# ---------------------------------------------------------
-# DATA LADEN
-# ---------------------------------------------------------
-df = load_rr(year)
-df["season"] = df.apply(assign_season, axis=1)
-
-df_month = df[df["month"] == month].copy()
-
-# Als RR ontbreekt → maak hem 0
-if "RR" not in df_month.columns:
-    df_month["RR"] = 0
-
-# RR numeriek maken (veilig)
-df_month["RR"] = pd.to_numeric(df_month["RR"], errors="coerce").fillna(0)
-
-# ---------------------------------------------------------
-# INTRODUCTIE
-# ---------------------------------------------------------
-st.markdown("""
-### 📘 Over dit dashboard
-Dit dashboard helpt je om:
-- Dagelijkse neerslag te analyseren  
-- Verschillen tussen 2026 en 2025 te bekijken  
-- Seizoenspatronen te begrijpen  
-- Statistieken per maand en per jaar te zien  
-
-Gebruik het menu links om naar de detailpagina’s te gaan.
-""")
-
-# ---------------------------------------------------------
-# SNELLE STATISTIEKEN
-# ---------------------------------------------------------
-st.markdown(f"### 📊 Snelle statistieken voor **{year} – maand {month}**")
-
-colA, colB, colC, colD = st.columns(4)
-
-with colA:
-    st.metric("Totaal (mm)", round(df_month["RR"].sum(), 1))
-
-with colB:
-    st.metric("Gemiddelde (mm/dag)", round(df_month["RR"].mean(), 2))
-
-with colC:
-    st.metric("Natte dagen", int((df_month["RR"] >= 1).sum()))
-
-with colD:
-    st.metric("Zware dagen (≥50mm)", int((df_month["RR"] >= 50).sum()))
-
-# ---------------------------------------------------------
+# -----------------------------
 # SEIZOEN INFO
-# ---------------------------------------------------------
-st.markdown("### 🌦️ Seizoen van deze maand")
-
-if len(df_month) > 0:
-    season_name = df_month["season"].iloc[0]
-else:
-    season_name = "Onbekend"
-
-st.info(f"**{season_name}** — volgens de tropische seizoensindeling van Suriname.")
-
-# ---------------------------------------------------------
-# FOOTER
-# ---------------------------------------------------------
-st.markdown("""
----
-📍 *Data: Dagelijkse neerslagmetingen Suriname (Hydromet, NOAA, LVT, Volunteer, CLIMSOFT)*  
-📅 *Jaren: 2025 & 2026*  
-""")
+# -----------------------------
+st.markdown("### 🌦️ Seizoensindeling")
+st.info(f"**2026:** {df_2026_m['season'].iloc[0] if len(df_2026_m)>0 else 'Onbekend'}")
+st.info(f"**2025:** {df_2025_m['season'].iloc[0] if len(df_2025_m)>0 else 'Onbekend'}")
