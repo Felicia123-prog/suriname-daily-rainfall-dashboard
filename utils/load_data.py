@@ -30,67 +30,63 @@ def load_rr(year):
     # Gebruik CSV als die bestaat
     if os.path.exists(csv_path) and os.path.getsize(csv_path) > 10:
         df = pd.read_csv(csv_path)
+        return df
 
-    elif os.path.exists(excel_path):
-        xls = pd.ExcelFile(excel_path)
-        frames = []
+    # Anders: lees Excel
+    if not os.path.exists(excel_path):
+        raise FileNotFoundError(f"Bestand ontbreekt: {excel_path}")
 
-        for sheet in xls.sheet_names:
-            temp = pd.read_excel(excel_path, sheet_name=sheet)
+    xls = pd.ExcelFile(excel_path)
+    frames = []
 
-            # --- Kolomnamen normaliseren ---
-            rename_map = {}
-            for c in temp.columns:
-                cl = c.lower().strip()
+    for sheet in xls.sheet_names:
+        temp = pd.read_excel(excel_path, sheet_name=sheet)
 
-                # Datum
-                if cl in ["date", "datum", "obsdatetime", "datetime"]:
-                    rename_map[c] = "date"
+        cols = [c.lower() for c in temp.columns]
 
-                # Neerslag (alle varianten)
-                if cl in [
-                    "rainfall (mm)", "rainfall", "rr", "rr(mm)", "rain_mm",
-                    "precip", "precipitation", "rain"
-                ]:
-                    rename_map[c] = "RR"
+        # -------------------------
+        # 2026 STRUCTUUR
+        # -------------------------
+        if "date" in cols and "rainfall (mm)" in cols:
+            temp = temp.rename(columns={
+                "Date": "date",
+                "Rainfall (mm)": "RR",
+                "Latitude": "Latitude",
+                "Longitude": "Longitude",
+                "StationID": "StationID"
+            })
 
-                # Latitude / Longitude
-                if cl in ["latitude", "lat"]:
-                    rename_map[c] = "Latitude"
-                if cl in ["longitude", "lon", "long"]:
-                    rename_map[c] = "Longitude"
-
-                # Station ID
-                if cl in ["stationid", "station", "station_id"]:
-                    rename_map[c] = "StationID"
-
-            temp = temp.rename(columns=rename_map)
-
-            # Alleen relevante kolommen
-            keep = [c for c in ["date", "RR", "Latitude", "Longitude", "StationID"] if c in temp.columns]
-            if not keep:
-                continue
-
-            temp = temp[keep]
+            temp["RR"] = temp["RR"].apply(clean_rain_value)
             frames.append(temp)
+            continue
 
-        if not frames:
-            raise ValueError(f"Geen bruikbare neerslagkolom gevonden in {year}.")
+        # -------------------------
+        # 2025 STRUCTUUR (CLIMSOFT)
+        # -------------------------
+        if {"year", "month", "day", "precip"}.issubset(set(cols)):
+            temp = temp.rename(columns={
+                "Year": "year",
+                "Month": "month",
+                "Day": "day",
+                "PRECIP": "RR",
+                "Lat": "Latitude",
+                "Lon": "Longitude",
+                "StationId": "StationID"
+            })
 
-        df = pd.concat(frames, ignore_index=True)
+            # Datum bouwen
+            temp["date"] = pd.to_datetime(
+                temp[["year", "month", "day"]], errors="coerce"
+            )
 
-        # RR numeriek maken
-        if "RR" not in df.columns:
-            df["RR"] = 0
+            temp["RR"] = temp["RR"].apply(clean_rain_value)
+            frames.append(temp)
+            continue
 
-        df["RR"] = df["RR"].apply(clean_rain_value)
+    if not frames:
+        raise ValueError(f"Geen bruikbare data gevonden in {excel_path}")
 
-        df.to_csv(csv_path, index=False)
-
-    else:
-        raise FileNotFoundError(
-            f"Geen data gevonden voor jaar {year}. Upload Rainfall_Data_Suriname_{year}.xlsx in /data."
-        )
+    df = pd.concat(frames, ignore_index=True)
 
     # Datum verwerken
     df["date"] = pd.to_datetime(df["date"], errors="coerce")
@@ -100,4 +96,5 @@ def load_rr(year):
     df["month"] = df["date"].dt.month
     df["day"] = df["date"].dt.day
 
+    df.to_csv(csv_path, index=False)
     return df
