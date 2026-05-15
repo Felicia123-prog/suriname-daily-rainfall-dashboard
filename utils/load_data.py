@@ -1,6 +1,5 @@
 import pandas as pd
 import os
-import numpy as np
 
 def load_rr(year):
     csv_path = f"data/rr_{year}.csv"
@@ -56,10 +55,16 @@ def load_rr(year):
 
         df = pd.concat(frames, ignore_index=True)
 
-        # --- RR numeriek maken ---
+        # --- RR veilig numeriek maken ---
+        if "RR" not in df.columns:
+            df["RR"] = 0
+
+        # Eerst ALLES naar string
+        df["RR"] = df["RR"].astype(str)
+
+        # Dan schoonmaken
         df["RR"] = (
             df["RR"]
-            .astype(str)
             .str.replace(",", ".", regex=False)
             .str.replace("mm", "", regex=False)
             .str.replace("MM", "", regex=False)
@@ -70,6 +75,7 @@ def load_rr(year):
             .str.strip()
         )
 
+        # Numeriek maken
         df["RR"] = pd.to_numeric(df["RR"], errors="coerce").fillna(0)
 
         # CSV opslaan
