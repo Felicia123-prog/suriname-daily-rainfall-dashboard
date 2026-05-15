@@ -38,34 +38,51 @@ def load_rr(year):
         for sheet in xls.sheet_names:
             temp = pd.read_excel(excel_path, sheet_name=sheet)
 
-            # Alleen deze kolommen gebruiken als ze bestaan
-            expected = ["Date", "Rainfall (mm)", "Latitude", "Longitude", "StationID"]
-            available = [c for c in expected if c in temp.columns]
+            # --- Kolomnamen normaliseren ---
+            rename_map = {}
+            for c in temp.columns:
+                cl = c.lower().strip()
 
-            # Sheet overslaan als hij geen neerslagkolom heeft
-            if "Rainfall (mm)" not in temp.columns:
-                continue
+                # Datum
+                if cl in ["date", "datum", "obsdatetime", "datetime"]:
+                    rename_map[c] = "date"
 
-            temp = temp[available].copy()
+                # Neerslag (alle varianten)
+                if cl in [
+                    "rainfall (mm)", "rainfall", "rr", "rr(mm)", "rain_mm",
+                    "precip", "precipitation", "rain"
+                ]:
+                    rename_map[c] = "RR"
 
-            # Hernoemen
-            rename_map = {
-                "Date": "date",
-                "Rainfall (mm)": "RR",
-                "Latitude": "Latitude",
-                "Longitude": "Longitude",
-                "StationID": "StationID"
-            }
+                # Latitude / Longitude
+                if cl in ["latitude", "lat"]:
+                    rename_map[c] = "Latitude"
+                if cl in ["longitude", "lon", "long"]:
+                    rename_map[c] = "Longitude"
+
+                # Station ID
+                if cl in ["stationid", "station", "station_id"]:
+                    rename_map[c] = "StationID"
+
             temp = temp.rename(columns=rename_map)
 
+            # Alleen relevante kolommen
+            keep = [c for c in ["date", "RR", "Latitude", "Longitude", "StationID"] if c in temp.columns]
+            if not keep:
+                continue
+
+            temp = temp[keep]
             frames.append(temp)
 
         if not frames:
-            raise ValueError("Geen enkele sheet bevat 'Rainfall (mm)'.")
+            raise ValueError(f"Geen bruikbare neerslagkolom gevonden in {year}.")
 
         df = pd.concat(frames, ignore_index=True)
 
         # RR numeriek maken
+        if "RR" not in df.columns:
+            df["RR"] = 0
+
         df["RR"] = df["RR"].apply(clean_rain_value)
 
         df.to_csv(csv_path, index=False)
