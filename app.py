@@ -4,12 +4,12 @@ import plotly.express as px
 from utils.load_data import load_rr
 from utils.seasons import assign_season
 
-st.set_page_config(page_title="Suriname Rainfall Comparison", layout="wide")
+st.set_page_config(page_title="Neerslagvergelijking 2025–2026", layout="wide")
 
 # ---------------------------------------------------------
 # TITEL
 # ---------------------------------------------------------
-st.title("🌧️ Suriname — Dagelijkse Neerslag per Station & Landelijk Gemiddelde (WMO‑Conform) — Vergelijking 2025–2026")
+st.title("🌧️ Neerslagvergelijking 2025–2026 — Suriname (WMO‑Conform)")
 
 # ---------------------------------------------------------
 # MODE SELECTIE
@@ -52,12 +52,12 @@ if mode == "Geheel Suriname (WMO‑gemiddelde)":
     df26_daily = df_2026_m.groupby("day")["RR"].mean().round(1).reset_index()
     df25_daily = df_2025_m.groupby("day")["RR"].mean().round(1).reset_index()
 
-    # Aantal stations
-    stations_2026 = df_2026_m["StationID"].nunique()
-    stations_2025 = df_2025_m["StationID"].nunique()
+    # Aantal stations per maand (alleen stations met data)
+    stations_2026 = df_2026_m[df_2026_m["RR"].notna()]["StationID"].nunique()
+    stations_2025 = df_2025_m[df_2025_m["RR"].notna()]["StationID"].nunique()
 
     st.info(
-        f"📡 Beschikbare stations — 2026: **{stations_2026}** | 2025: **{stations_2025}**"
+        f"📡 Beschikbare stations in {month_names[month]} — 2026: **{stations_2026}** | 2025: **{stations_2025}**"
     )
 
     # -----------------------------
