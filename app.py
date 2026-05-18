@@ -6,8 +6,16 @@ from utils.seasons import assign_season
 
 st.set_page_config(page_title="Suriname Rainfall Comparison", layout="wide")
 
-st.title("🌧️ Dagelijkse Neerslag Vergelijking — Suriname")
-st.write("Vergelijk dagelijkse neerslag tussen 2025 en 2026 per maand.")
+st.title("🌧️ Dagelijkse Neerslag — Suriname (WMO‑conform)")
+
+# -----------------------------
+# MODE SELECTIE
+# -----------------------------
+mode = st.radio(
+    "Kies weergave:",
+    ["Geheel Suriname (WMO‑gemiddelde)", "Per station / district"],
+    horizontal=True
+)
 
 # -----------------------------
 # MAAND SELECTIE
@@ -29,59 +37,80 @@ df_2025 = load_rr(2025)
 df_2026["season"] = df_2026.apply(assign_season, axis=1)
 df_2025["season"] = df_2025.apply(assign_season, axis=1)
 
-# Filter op maand
 df_2026_m = df_2026[df_2026["month"] == month]
 df_2025_m = df_2025[df_2025["month"] == month]
 
 # -----------------------------
-# STATISTIEKEN
+# MODE 1 — GEHEEL SURINAME (WMO GEMIDDELDE)
 # -----------------------------
-colA, colB = st.columns(2)
+if mode == "Geheel Suriname (WMO‑gemiddelde)":
 
-with colA:
-    st.subheader(f"📊 Statistieken — 2026 ({month_names[month]})")
-    st.metric("Totaal (mm)", round(df_2026_m["RR"].sum(), 1))
-    st.metric("Gemiddelde (mm/dag)", round(df_2026_m["RR"].mean(), 2))
-    st.metric("Natte dagen (≥1mm)", int((df_2026_m["RR"] >= 1).sum()))
-    st.metric("Zware dagen (≥50mm)", int((df_2026_m["RR"] >= 50).sum()))
+    # Dagelijkse WMO-gemiddelden
+    df26_daily = df_2026_m.groupby("day")["RR"].mean().reset_index()
+    df25_daily = df_2025_m.groupby("day")["RR"].mean().reset_index()
 
-with colB:
-    st.subheader(f"📊 Statistieken — 2025 ({month_names[month]})")
-    st.metric("Totaal (mm)", round(df_2025_m["RR"].sum(), 1))
-    st.metric("Gemiddelde (mm/dag)", round(df_2025_m["RR"].mean(), 2))
-    st.metric("Natte dagen (≥1mm)", int((df_2025_m["RR"] >= 1).sum()))
-    st.metric("Zware dagen (≥50mm)", int((df_2025_m["RR"] >= 50).sum()))
+    # Statistieken
+    colA, colB = st.columns(2)
 
-# -----------------------------
-# GRAFIEKEN NAAST ELKAAR
-# -----------------------------
-col1, col2 = st.columns(2)
+    with colA:
+        st.subheader(f"📊 Statistieken — 2026 ({month_names[month]})")
+        st.metric("Totaal (mm)", round(df26_daily["RR"].sum(), 1))
+        st.metric("Gemiddelde (mm/dag)", round(df26_daily["RR"].mean(), 2))
+        st.metric("Natte dagen (≥1mm)", int((df26_daily["RR"] >= 1).sum()))
+        st.metric("Zware dagen (≥50mm)", int((df26_daily["RR"] >= 50).sum()))
 
-with col1:
-    st.subheader(f"📅 Dagelijkse neerslag — 2026 ({month_names[month]})")
-    fig1 = px.bar(
-        df_2026_m,
-        x="day",
-        y="RR",
-        labels={"day": "Dag", "RR": "Neerslag (mm)"},
-        title=f"2026 — {month_names[month]}"
-    )
-    st.plotly_chart(fig1, use_container_width=True)
+    with colB:
+        st.subheader(f"📊 Statistieken — 2025 ({month_names[month]})")
+        st.metric("Totaal (mm)", round(df25_daily["RR"].sum(), 1))
+        st.metric("Gemiddelde (mm/dag)", round(df25_daily["RR"].mean(), 2))
+        st.metric("Natte dagen (≥1mm)", int((df25_daily["RR"] >= 1).sum()))
+        st.metric("Zware dagen (≥50mm)", int((df25_daily["RR"] >= 50).sum()))
 
-with col2:
-    st.subheader(f"📅 Dagelijkse neerslag — 2025 ({month_names[month]})")
-    fig2 = px.bar(
-        df_2025_m,
-        x="day",
-        y="RR",
-        labels={"day": "Dag", "RR": "Neerslag (mm)"},
-        title=f"2025 — {month_names[month]}"
-    )
-    st.plotly_chart(fig2, use_container_width=True)
+    # Grafieken
+    col1, col2 = st.columns(2)
+
+    with col1:
+        fig1 = px.bar(df26_daily, x="day", y="RR", title=f"2026 — {month_names[month]}")
+        st.plotly_chart(fig1, use_container_width=True)
+
+    with col2:
+        fig2 = px.bar(df25_daily, x="day", y="RR", title=f"2025 — {month_names[month]}")
+        st.plotly_chart(fig2, use_container_width=True)
 
 # -----------------------------
-# SEIZOEN INFO
+# MODE 2 — PER STATION / DISTRICT
 # -----------------------------
-st.markdown("### 🌦️ Seizoensindeling")
-st.info(f"**2026:** {df_2026_m['season'].iloc[0] if len(df_2026_m)>0 else 'Onbekend'}")
-st.info(f"**2025:** {df_2025_m['season'].iloc[0] if len(df_2025_m)>0 else 'Onbekend'}")
+else:
+    choice = st.selectbox("Kies weergave:", ["Per station"])
+
+    if choice == "Per station":
+        station = st.selectbox("Kies station:", sorted(df_2026["StationID"].unique()))
+
+        df26_s = df_2026_m[df_2026_m["StationID"] == station]
+        df25_s = df_2025_m[df_2025_m["StationID"] == station]
+
+        colA, colB = st.columns(2)
+
+        with colA:
+            st.subheader(f"📊 Statistieken — 2026 ({station})")
+            st.metric("Totaal (mm)", round(df26_s["RR"].sum(), 1))
+            st.metric("Gemiddelde (mm/dag)", round(df26_s["RR"].mean(), 2))
+            st.metric("Natte dagen (≥1mm)", int((df26_s["RR"] >= 1).sum()))
+            st.metric("Zware dagen (≥50mm)", int((df26_s["RR"] >= 50).sum()))
+
+        with colB:
+            st.subheader(f"📊 Statistieken — 2025 ({station})")
+            st.metric("Totaal (mm)", round(df25_s["RR"].sum(), 1))
+            st.metric("Gemiddelde (mm/dag)", round(df25_s["RR"].mean(), 2))
+            st.metric("Natte dagen (≥1mm)", int((df25_s["RR"] >= 1).sum()))
+            st.metric("Zware dagen (≥50mm)", int((df25_s["RR"] >= 50).sum()))
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            fig1 = px.bar(df26_s, x="day", y="RR", title=f"2026 — {station}")
+            st.plotly_chart(fig1, use_container_width=True)
+
+        with col2:
+            fig2 = px.bar(df25_s, x="day", y="RR", title=f"2025 — {station}")
+            st.plotly_chart(fig2, use_container_width=True)
