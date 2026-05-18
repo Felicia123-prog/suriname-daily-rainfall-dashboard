@@ -48,9 +48,46 @@ df_2025_m = df_2025[df_2025["month"] == month]
 # ---------------------------------------------------------
 if mode == "Geheel Suriname (WMO‑gemiddelde)":
 
-    # Dagelijkse WMO-gemiddelden
-    df26_daily = df_2026_m.groupby("day")["RR"].mean().reset_index()
-    df25_daily = df_2025_m.groupby("day")["RR"].mean().reset_index()
+    # Dagelijkse WMO-gemiddelden (1 decimaal)
+    df26_daily = df_2026_m.groupby("day")["RR"].mean().round(1).reset_index()
+    df25_daily = df_2025_m.groupby("day")["RR"].mean().round(1).reset_index()
+
+    # Aantal stations
+    stations_2026 = df_2026_m["StationID"].nunique()
+    stations_2025 = df_2025_m["StationID"].nunique()
+
+    st.info(
+        f"📡 Beschikbare stations — 2026: **{stations_2026}** | 2025: **{stations_2025}**"
+    )
+
+    # -----------------------------
+    # WMO INDICATOREN
+    # -----------------------------
+    # Landelijk (WMO-gemiddelde)
+    heavy_nat_2026 = int((df26_daily["RR"] >= 50).sum())
+    heavy_nat_2025 = int((df25_daily["RR"] >= 50).sum())
+
+    extreme_nat_2026 = int((df26_daily["RR"] >= 100).sum())
+    extreme_nat_2025 = int((df25_daily["RR"] >= 100).sum())
+
+    dry_nat_2026 = int((df26_daily["RR"] < 1).sum())
+    dry_nat_2025 = int((df25_daily["RR"] < 1).sum())
+
+    # Station-trigger (≥ 1 station)
+    heavy_station_2026 = df_2026_m.groupby("day")["RR"].max().ge(50).sum()
+    heavy_station_2025 = df_2025_m.groupby("day")["RR"].max().ge(50).sum()
+
+    extreme_station_2026 = df_2026_m.groupby("day")["RR"].max().ge(100).sum()
+    extreme_station_2025 = df_2025_m.groupby("day")["RR"].max().ge(100).sum()
+
+    # Percentielen
+    p90_2026 = df26_daily["RR"].quantile(0.90).round(1)
+    p95_2026 = df26_daily["RR"].quantile(0.95).round(1)
+    p99_2026 = df26_daily["RR"].quantile(0.99).round(1)
+
+    p90_2025 = df25_daily["RR"].quantile(0.90).round(1)
+    p95_2025 = df25_daily["RR"].quantile(0.95).round(1)
+    p99_2025 = df25_daily["RR"].quantile(0.99).round(1)
 
     # -----------------------------
     # STATISTIEKEN
@@ -60,16 +97,28 @@ if mode == "Geheel Suriname (WMO‑gemiddelde)":
     with colA:
         st.subheader(f"📊 Statistieken — 2026 ({month_names[month]})")
         st.metric("Totaal (mm)", round(df26_daily["RR"].sum(), 1))
-        st.metric("Gemiddelde (mm/dag)", round(df26_daily["RR"].mean(), 2))
+        st.metric("Gemiddelde (mm/dag)", round(df26_daily["RR"].mean(), 1))
         st.metric("Natte dagen (≥1mm)", int((df26_daily["RR"] >= 1).sum()))
-        st.metric("Zware dagen (≥50mm)", int((df26_daily["RR"] >= 50).sum()))
+        st.metric("Zware dagen (landelijk ≥50mm)", heavy_nat_2026)
+        st.metric("Zware dagen (≥1 station ≥50mm)", heavy_station_2026)
+        st.metric("Extreme dagen (landelijk ≥100mm)", extreme_nat_2026)
+        st.metric("Extreme dagen (≥1 station ≥100mm)", extreme_station_2026)
+        st.metric("Droge dagen (<1mm)", dry_nat_2026)
+        st.metric("Max dagwaarde (mm)", df26_daily["RR"].max().round(1))
+        st.metric("P95 (mm)", p95_2026)
 
     with colB:
         st.subheader(f"📊 Statistieken — 2025 ({month_names[month]})")
         st.metric("Totaal (mm)", round(df25_daily["RR"].sum(), 1))
-        st.metric("Gemiddelde (mm/dag)", round(df25_daily["RR"].mean(), 2))
+        st.metric("Gemiddelde (mm/dag)", round(df25_daily["RR"].mean(), 1))
         st.metric("Natte dagen (≥1mm)", int((df25_daily["RR"] >= 1).sum()))
-        st.metric("Zware dagen (≥50mm)", int((df25_daily["RR"] >= 50).sum()))
+        st.metric("Zware dagen (landelijk ≥50mm)", heavy_nat_2025)
+        st.metric("Zware dagen (≥1 station ≥50mm)", heavy_station_2025)
+        st.metric("Extreme dagen (landelijk ≥100mm)", extreme_nat_2025)
+        st.metric("Extreme dagen (≥1 station ≥100mm)", extreme_station_2025)
+        st.metric("Droge dagen (<1mm)", dry_nat_2025)
+        st.metric("Max dagwaarde (mm)", df25_daily["RR"].max().round(1))
+        st.metric("P95 (mm)", p95_2025)
 
     # -----------------------------
     # GRAFIEKEN
@@ -77,23 +126,15 @@ if mode == "Geheel Suriname (WMO‑gemiddelde)":
     col1, col2 = st.columns(2)
 
     with col1:
-        fig1 = px.bar(
-            df26_daily,
-            x="day",
-            y="RR",
-            labels={"day": "Dag", "RR": "Neerslag (mm)"},
-            title=f"2026 — {month_names[month]}"
-        )
+        fig1 = px.bar(df26_daily, x="day", y="RR",
+                      labels={"day": "Dag", "RR": "Neerslag (mm)"},
+                      title=f"2026 — {month_names[month]}")
         st.plotly_chart(fig1, use_container_width=True)
 
     with col2:
-        fig2 = px.bar(
-            df25_daily,
-            x="day",
-            y="RR",
-            labels={"day": "Dag", "RR": "Neerslag (mm)"},
-            title=f"2025 — {month_names[month]}"
-        )
+        fig2 = px.bar(df25_daily, x="day", y="RR",
+                      labels={"day": "Dag", "RR": "Neerslag (mm)"},
+                      title=f"2025 — {month_names[month]}")
         st.plotly_chart(fig2, use_container_width=True)
 
 # ---------------------------------------------------------
@@ -102,8 +143,24 @@ if mode == "Geheel Suriname (WMO‑gemiddelde)":
 else:
     station = st.selectbox("Kies station:", sorted(df_2026["StationID"].unique()))
 
-    df26_s = df_2026_m[df_2026_m["StationID"] == station]
-    df25_s = df_2025_m[df_2025_m["StationID"] == station]
+    df26_s = df_2026_m[df_2026_m["StationID"] == station].copy()
+    df25_s = df_2025_m[df_2025_m["StationID"] == station].copy()
+
+    df26_s["RR"] = df26_s["RR"].round(1)
+    df25_s["RR"] = df25_s["RR"].round(1)
+
+    # WMO indicatoren per station
+    heavy_26 = int((df26_s["RR"] >= 50).sum())
+    heavy_25 = int((df25_s["RR"] >= 50).sum())
+
+    extreme_26 = int((df26_s["RR"] >= 100).sum())
+    extreme_25 = int((df25_s["RR"] >= 100).sum())
+
+    dry_26 = int((df26_s["RR"] < 1).sum())
+    dry_25 = int((df25_s["RR"] < 1).sum())
+
+    p95_s_26 = df26_s["RR"].quantile(0.95).round(1)
+    p95_s_25 = df25_s["RR"].quantile(0.95).round(1)
 
     # -----------------------------
     # STATISTIEKEN
@@ -113,16 +170,24 @@ else:
     with colA:
         st.subheader(f"📊 Statistieken — 2026 ({station})")
         st.metric("Totaal (mm)", round(df26_s["RR"].sum(), 1))
-        st.metric("Gemiddelde (mm/dag)", round(df26_s["RR"].mean(), 2))
+        st.metric("Gemiddelde (mm/dag)", round(df26_s["RR"].mean(), 1))
         st.metric("Natte dagen (≥1mm)", int((df26_s["RR"] >= 1).sum()))
-        st.metric("Zware dagen (≥50mm)", int((df26_s["RR"] >= 50).sum()))
+        st.metric("Zware dagen (≥50mm)", heavy_26)
+        st.metric("Extreme dagen (≥100mm)", extreme_26)
+        st.metric("Droge dagen (<1mm)", dry_26)
+        st.metric("Max dagwaarde (mm)", df26_s["RR"].max().round(1))
+        st.metric("P95 (mm)", p95_s_26)
 
     with colB:
         st.subheader(f"📊 Statistieken — 2025 ({station})")
         st.metric("Totaal (mm)", round(df25_s["RR"].sum(), 1))
-        st.metric("Gemiddelde (mm/dag)", round(df25_s["RR"].mean(), 2))
+        st.metric("Gemiddelde (mm/dag)", round(df25_s["RR"].mean(), 1))
         st.metric("Natte dagen (≥1mm)", int((df25_s["RR"] >= 1).sum()))
-        st.metric("Zware dagen (≥50mm)", int((df25_s["RR"] >= 50).sum()))
+        st.metric("Zware dagen (≥50mm)", heavy_25)
+        st.metric("Extreme dagen (≥100mm)", extreme_25)
+        st.metric("Droge dagen (<1mm)", dry_25)
+        st.metric("Max dagwaarde (mm)", df25_s["RR"].max().round(1))
+        st.metric("P95 (mm)", p95_s_25)
 
     # -----------------------------
     # GRAFIEKEN
@@ -130,21 +195,13 @@ else:
     col1, col2 = st.columns(2)
 
     with col1:
-        fig1 = px.bar(
-            df26_s,
-            x="day",
-            y="RR",
-            labels={"day": "Dag", "RR": "Neerslag (mm)"},
-            title=f"2026 — {station}"
-        )
+        fig1 = px.bar(df26_s, x="day", y="RR",
+                      labels={"day": "Dag", "RR": "Neerslag (mm)"},
+                      title=f"2026 — {station}")
         st.plotly_chart(fig1, use_container_width=True)
 
     with col2:
-        fig2 = px.bar(
-            df25_s,
-            x="day",
-            y="RR",
-            labels={"day": "Dag", "RR": "Neerslag (mm)"},
-            title=f"2025 — {station}"
-        )
+        fig2 = px.bar(df25_s, x="day", y="RR",
+                      labels={"day": "Dag", "RR": "Neerslag (mm)"},
+                      title=f"2025 — {station}")
         st.plotly_chart(fig2, use_container_width=True)
