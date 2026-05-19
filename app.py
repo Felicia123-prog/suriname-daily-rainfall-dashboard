@@ -46,15 +46,16 @@ df_2025_m = df_2025[df_2025["month"] == month]
 # ---------------------------------------------------------
 # ANALYSE FUNCTIE
 # ---------------------------------------------------------
-def generate_analysis(total26, total25, avg26, avg25, max26, max25, season, month_name):
+def generate_analysis(total26, total25, avg26, avg25, max_avg26, max_avg25,
+                      max_station26, max_station25, season, month_name):
 
     diff_total = total26 - total25
     perc_total = (diff_total / total25 * 100) if total25 > 0 else 0
 
-    diff_max = max26 - max25
-
     trend = "natter" if diff_total > 0 else "droger"
-    intensity = "intensievere buien" if diff_max > 0 else "minder intense buien"
+
+    # Intensiteit op basis van stationwaarden
+    intensity_trend = "intensievere buien" if max_station26 > max_station25 else "minder intense buien"
 
     return f"""
 ### 📘 Analyse — {month_name}
@@ -64,14 +65,17 @@ In {month_name} 2026 viel **{abs(perc_total):.1f}% {trend}** neerslag dan in {mo
 ({total26:.1f} mm vs {total25:.1f} mm).
 
 **Intensiteit:**  
-De natste dag in 2026 bereikte **{max26:.1f} mm**, vergeleken met **{max25:.1f} mm** in 2025.  
-Dit wijst op **{intensity}** in 2026.
+De hoogste *gemiddelde* dagneerslag in 2026 was **{max_avg26:.1f} mm**,  
+maar de hoogste *stationwaarde* bereikte **{max_station26:.1f} mm**  
+(vergeleken met **{max_station25:.1f} mm** in 2025).  
+Dit toont aan dat er lokaal **{intensity_trend}** voorkwamen.
 
 **Seizoenscontext:**  
 {month_name} valt in de **{season}**, wat helpt om de regenpatronen te duiden.
 
 **Samenvatting:**  
-{month_name} 2026 was **{trend}** dan {month_name} 2025, met {intensity}.
+{month_name} 2026 was **{trend}** dan {month_name} 2025,  
+met lokaal **{intensity_trend}**.
 """
 
 # ---------------------------------------------------------
@@ -92,7 +96,7 @@ if mode == "Geheel Suriname (WMO‑gemiddelde)":
     )
 
     # -----------------------------
-    # STATISTIEKEN (ALLEEN 3)
+    # STATISTIEKEN
     # -----------------------------
     colA, colB = st.columns(2)
 
@@ -100,20 +104,25 @@ if mode == "Geheel Suriname (WMO‑gemiddelde)":
     total25 = df25_daily["RR"].sum()
     avg26 = df26_daily["RR"].mean()
     avg25 = df25_daily["RR"].mean()
-    max26 = df26_daily["RR"].max()
-    max25 = df25_daily["RR"].max()
+
+    max_avg26 = df26_daily["RR"].max()
+    max_avg25 = df25_daily["RR"].max()
+
+    # Nieuwe intensiteit: max stationwaarde
+    max_station26 = df_2026_m["RR"].max()
+    max_station25 = df_2025_m["RR"].max()
 
     with colA:
         st.subheader(f"📊 Statistieken — 2026 ({month_names[month]})")
         st.metric("Totaal (mm)", round(total26, 1))
         st.metric("Gemiddelde (mm/dag)", round(avg26, 1))
-        st.metric("Max gemiddelde dagneerslag (mm)", round(max26, 1))
+        st.metric("Max gemiddelde dagneerslag (mm)", round(max_avg26, 1))
 
     with colB:
         st.subheader(f"📊 Statistieken — 2025 ({month_names[month]})")
         st.metric("Totaal (mm)", round(total25, 1))
         st.metric("Gemiddelde (mm/dag)", round(avg25, 1))
-        st.metric("Max gemiddelde dagneerslag (mm)", round(max25, 1))
+        st.metric("Max gemiddelde dagneerslag (mm)", round(max_avg25, 1))
 
     # -----------------------------
     # GRAFIEKEN + SEIZOEN
@@ -141,7 +150,16 @@ if mode == "Geheel Suriname (WMO‑gemiddelde)":
     # -----------------------------
     # ANALYSE
     # -----------------------------
-    st.markdown(generate_analysis(total26, total25, avg26, avg25, max26, max25, season_2026, month_names[month]))
+    st.markdown(
+        generate_analysis(
+            total26, total25,
+            avg26, avg25,
+            max_avg26, max_avg25,
+            max_station26, max_station25,
+            season_2026,
+            month_names[month]
+        )
+    )
 
 # ---------------------------------------------------------
 # MODE 2 — PER STATION
@@ -163,7 +181,7 @@ else:
     max25 = df25_s["RR"].max()
 
     # -----------------------------
-    # STATISTIEKEN (ALLEEN 3)
+    # STATISTIEKEN
     # -----------------------------
     colA, colB = st.columns(2)
 
@@ -205,4 +223,13 @@ else:
     # -----------------------------
     # ANALYSE
     # -----------------------------
-    st.markdown(generate_analysis(total26, total25, avg26, avg25, max26, max25, season_2026, month_names[month]))
+    st.markdown(
+        generate_analysis(
+            total26, total25,
+            avg26, avg25,
+            max26, max25,
+            max26, max25,
+            season_2026,
+            month_names[month]
+        )
+    )
