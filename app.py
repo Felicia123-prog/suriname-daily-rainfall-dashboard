@@ -7,53 +7,40 @@ from utils.seasons import assign_season
 st.set_page_config(page_title="Maandelijkse Neerslagrapportage 2025–2026", layout="wide")
 
 # ---------------------------------------------------------
-# SUPER-UNIFORMIZER (werkt voor ALLE jaren)
+# SUPER-UNIFORMIZER (werkt voor jouw echte data)
 # ---------------------------------------------------------
 def uniformize(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
 
-    # -----------------------------
-    # 1. StationID detecteren
-    # -----------------------------
-    if "StationID" not in df.columns:
-        if "StationId" in df.columns:
-            df = df.rename(columns={"StationId": "StationID"})
-        else:
-            df["StationID"] = None
+    # 1. Kolomnamen normaliseren
+    df.columns = [c.strip().lower() for c in df.columns]
 
-    # -----------------------------
-    # 2. RR detecteren
-    # -----------------------------
-    if "RR" not in df.columns:
-        if "PRECIP" in df.columns:
-            df = df.rename(columns={"PRECIP": "RR"})
-        elif "Rainfall (mm)" in df.columns:
-            df = df.rename(columns={"Rainfall (mm)": "RR"})
-        else:
-            df["RR"] = None
+    # 2. Unnamed kolommen verwijderen
+    df = df.loc[:, ~df.columns.str.contains("unnamed")]
 
-    df["RR"] = pd.to_numeric(df["RR"], errors="coerce")
+    # 3. StationID normaliseren
+    if "stationid" not in df.columns:
+        df["stationid"] = None
 
-    # -----------------------------
-    # 3. Datum detecteren
-    # -----------------------------
-    has_ymd = {"Year", "Month", "Day"}.issubset(df.columns)
-    has_date = "Date" in df.columns
+    # 4. RR normaliseren
+    if "rr" not in df.columns:
+        df["rr"] = None
 
-    if has_ymd:
-        df["Date"] = pd.to_datetime(df[["Year", "Month", "Day"]], errors="coerce")
+    df["rr"] = pd.to_numeric(df["rr"], errors="coerce")
 
-    elif has_date:
-        df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
-        df["Year"] = df["Date"].dt.year
-        df["Month"] = df["Date"].dt.month
-        df["Day"] = df["Date"].dt.day
-
+    # 5. Datum normaliseren
+    if "date" in df.columns:
+        df["date"] = pd.to_datetime(df["date"], errors="coerce")
     else:
-        df["Date"] = pd.NaT
-        df["Year"] = None
-        df["Month"] = None
-        df["Day"] = None
+        df["date"] = pd.to_datetime(
+            df[["year", "month", "day"]],
+            errors="coerce"
+        )
+
+    # 6. Year / Month / Day opnieuw afleiden
+    df["year"] = df["date"].dt.year
+    df["month"] = df["date"].dt.month
+    df["day"] = df["date"].dt.day
 
     return df
 
@@ -146,21 +133,18 @@ df_2026 = uniformize(df_2026_raw)
 df_2025["season"] = df_2025.apply(assign_season, axis=1)
 df_2026["season"] = df_2026.apply(assign_season, axis=1)
 
-df_2025_m = df_2025[df_2025["Month"] == month]
-df_2026_m = df_2026[df_2026["Month"] == month]
-
-st.write("2025 columns:", df_2025_raw.columns.tolist())
-st.write("2026 columns:", df_2026_raw.columns.tolist())
+df_2025_m = df_2025[df_2025["month"] == month]
+df_2026_m = df_2026[df_2026["month"] == month]
 
 # ---------------------------------------------------------
 # Mode 1 — Geheel Suriname
 # ---------------------------------------------------------
 if mode == "Geheel Suriname (WMO‑gemiddelde)":
-    df26_daily = df_2026_m.groupby("Day")["RR"].mean().round(1).reset_index()
-    df25_daily = df_2025_m.groupby("Day")["RR"].mean().round(1).reset_index()
+    df26_daily = df_2026_m.groupby("day")["rr"].mean().round(1).reset_index()
+    df25_daily = df_2025_m.groupby("day")["rr"].mean().round(1).reset_index()
 
-    stations_2026 = df_2026_m.groupby("StationID")["RR"].apply(lambda x: x.notna().any()).sum()
-    stations_2025 = df_2025_m.groupby("StationID")["RR"].apply(lambda x: x.notna().any()).sum()
+    stations_2026 = df_2026_m.groupby("stationid")["rr"].apply(lambda x: x.notna().any()).sum()
+    stations_2025 = df_2025_m.groupby("stationid")["rr"].apply(lambda x: x.notna().any()).sum()
 
     st.info(
         f"📡 Beschikbare stations in {month_names[month]} — 2026: **{stations_2026}** | 2025: **{stations_2025}**"
@@ -168,16 +152,16 @@ if mode == "Geheel Suriname (WMO‑gemiddelde)":
 
     colA, colB = st.columns(2)
 
-    total26 = df26_daily["RR"].sum()
-    total25 = df25_daily["RR"].sum()
-    avg26 = df26_daily["RR"].mean()
-    avg25 = df25_daily["RR"].mean()
+    total26 = df26_daily["rr"].sum()
+    total25 = df25_daily["rr"].sum()
+    avg26 = df26_daily["rr"].mean()
+    avg25 = df25_daily["rr"].mean()
 
-    max_avg26 = df26_daily["RR"].max()
-    max_avg25 = df25_daily["RR"].max()
+    max_avg26 = df26_daily["rr"].max()
+    max_avg25 = df25_daily["rr"].max()
 
-    max_station26 = df_2026_m["RR"].dropna().max()
-    max_station25 = df_2025_m["RR"].dropna().max()
+    max_station26 = df_2026_m["rr"].dropna().max()
+    max_station25 = df_2025_m["rr"].dropna().max()
 
     with colA:
         st.subheader(f"📊 Statistieken — 2026 ({month_names[month]})")
@@ -194,8 +178,8 @@ if mode == "Geheel Suriname (WMO‑gemiddelde)":
     col1, col2 = st.columns(2)
 
     with col1:
-        fig1 = px.bar(df26_daily, x="Day", y="RR",
-                      labels={"Day": "Dag", "RR": "Neerslag (mm)"},
+        fig1 = px.bar(df26_daily, x="day", y="rr",
+                      labels={"day": "Dag", "rr": "Neerslag (mm)"},
                       title=f"2026 — {month_names[month]}")
         st.plotly_chart(fig1, use_container_width=True)
 
@@ -203,8 +187,8 @@ if mode == "Geheel Suriname (WMO‑gemiddelde)":
             st.caption(f"🌱 Seizoen 2026: **{df_2026_m['season'].iloc[0]}**")
 
     with col2:
-        fig2 = px.bar(df25_daily, x="Day", y="RR",
-                      labels={"Day": "Dag", "RR": "Neerslag (mm)"},
+        fig2 = px.bar(df25_daily, x="day", y="rr",
+                      labels={"day": "Dag", "rr": "Neerslag (mm)"},
                       title=f"2025 — {month_names[month]}")
         st.plotly_chart(fig2, use_container_width=True)
 
@@ -234,21 +218,21 @@ if mode == "Geheel Suriname (WMO‑gemiddelde)":
 # Mode 2 — Per station
 # ---------------------------------------------------------
 else:
-    all_stations = sorted(set(df_2025["StationID"].unique()).union(df_2026["StationID"].unique()))
+    all_stations = sorted(set(df_2025["stationid"].unique()).union(df_2026["stationid"].unique()))
     station = st.selectbox("Kies station:", all_stations)
 
-    df26_s = df_2026_m[df_2026_m["StationID"] == station].copy()
-    df25_s = df_2025_m[df_2025_m["StationID"] == station].copy()
+    df26_s = df_2026_m[df_2026_m["stationid"] == station].copy()
+    df25_s = df_2025_m[df_2025_m["stationid"] == station].copy()
 
-    df26_s["RR"] = df26_s["RR"].round(1)
-    df25_s["RR"] = df25_s["RR"].round(1)
+    df26_s["rr"] = df26_s["rr"].round(1)
+    df25_s["rr"] = df25_s["rr"].round(1)
 
-    total26 = df26_s["RR"].sum()
-    total25 = df25_s["RR"].sum()
-    avg26 = df26_s["RR"].mean()
-    avg25 = df25_s["RR"].mean()
-    max26 = df26_s["RR"].max()
-    max25 = df25_s["RR"].max()
+    total26 = df26_s["rr"].sum()
+    total25 = df25_s["rr"].sum()
+    avg26 = df26_s["rr"].mean()
+    avg25 = df25_s["rr"].mean()
+    max26 = df26_s["rr"].max()
+    max25 = df25_s["rr"].max()
 
     colA, colB = st.columns(2)
 
@@ -268,8 +252,8 @@ else:
 
     with col1:
         if not df26_s.empty:
-            fig1 = px.bar(df26_s, x="Day", y="RR",
-                          labels={"Day": "Dag", "RR": "Neerslag (mm)"},
+            fig1 = px.bar(df26_s, x="day", y="rr",
+                          labels={"day": "Dag", "rr": "Neerslag (mm)"},
                           title=f"2026 — {station}")
             st.plotly_chart(fig1, use_container_width=True)
             st.caption(f"🌱 Seizoen 2026: **{df26_s['season'].iloc[0]}**")
@@ -278,8 +262,8 @@ else:
 
     with col2:
         if not df25_s.empty:
-            fig2 = px.bar(df25_s, x="Day", y="RR",
-                          labels={"Day": "Dag", "RR": "Neerslag (mm)"},
+            fig2 = px.bar(df25_s, x="day", y="rr",
+                          labels={"day": "Dag", "rr": "Neerslag (mm)"},
                           title=f"2025 — {station}")
             st.plotly_chart(fig2, use_container_width=True)
             st.caption(f"🌱 Seizoen 2025: **{df25_s['season'].iloc[0]}**")
