@@ -1,114 +1,85 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from utils.load_data import load_rr
-from utils.seasons import assign_season
 
 st.set_page_config(page_title="Maandelijkse Neerslagrapportage 2025–2026", layout="wide")
 
 # ---------------------------------------------------------
-# ULTRA-ROBUSTE UNIFORMIZER — CUMULATIEF WORDT ALTIJD UITGESLOTEN
+# LOAD ALL SHEETS FROM EXCEL
+# ---------------------------------------------------------
+def load_rr(year):
+    if year == 2026:
+        path = r"C:\Users\Felicia\OneDrive\Desktop\Rainfall_Data_Suriname_2026.xlsx"
+    else:
+        path = r"C:\Users\Felicia\OneDrive\Desktop\Rainfall_Data_Suriname_2025.xlsx"
+
+    xls = pd.ExcelFile(path)
+    frames = []
+
+    for sheet in xls.sheet_names:
+        df = pd.read_excel(path, sheet_name=sheet)
+
+        df.columns = [c.strip().lower() for c in df.columns]
+
+        # verplicht
+        for col in ["date", "latitude", "longitude", "stationid"]:
+            if col not in df.columns:
+                df[col] = None
+
+        # neerslagkolom zoeken
+        rain_col = None
+        for c in df.columns:
+            if any(k in c for k in ["rain", "precip", "rr", "waarde", "value"]):
+                rain_col = c
+                break
+
+        if rain_col is None:
+            continue
+
+        df = df[["date", "latitude", "longitude", "stationid", rain_col]]
+        df = df.rename(columns={rain_col: "rain_raw"})
+
+        frames.append(df)
+
+    if not frames:
+        return pd.DataFrame()
+
+    return pd.concat(frames, ignore_index=True)
+
+
+# ---------------------------------------------------------
+# UNIFORMIZER — verwijdert ALLE cumulatieven
 # ---------------------------------------------------------
 def uniformize(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
-    df.columns = [c.strip().lower() for c in df.columns]
 
-    # 1. Neerslagkolom zoeken (maakt niet uit hoe hij heet)
-    rain_cols = [c for c in df.columns if any(k in c.lower() for k in ["rr", "rain", "precip", "waarde", "value"])]
-    if len(rain_cols) > 0:
-        raw_rr = df[rain_cols[0]]
-    else:
-        raw_rr = pd.Series([None] * len(df))
+    # Forceer alles naar tekst
+    raw = df["rain_raw"].apply(lambda x: str(x).strip())
 
-    # 2. FORCEER ALLES NAAR TEKST (ook numbers → text)
-    raw_rr = raw_rr.apply(lambda x: str(x).strip())
+    # Unicode normalisatie
+    raw = raw.str.normalize("NFKD").str.encode("ascii", "ignore").str.decode("ascii")
 
-    # 3. NORMALISEER UNICODE (maakt rare C’s → normale C)
-    raw_rr = raw_rr.str.normalize("NFKD").str.encode("ascii", "ignore").str.decode("ascii")
+    # Whitespace verwijderen
+    raw = raw.str.replace(r"\s+", "", regex=True)
 
-    # 4. VERWIJDER ALLE WHITESPACE
-    raw_rr = raw_rr.str.replace(r"\s+", "", regex=True)
+    # Detecteer cumulatief (alles met C)
+    df["is_cumulative"] = raw.str.contains("C", case=False)
 
-    # 5. ALS EXCEL DE C VERBERGT (number + formatting) → FORCEER C
-    raw_rr = raw_rr.mask(
-        raw_rr.str.match(r"^\d+$") & df[rain_cols[0]].astype(str).str.contains("C", case=False),
-        raw_rr + "C"
-    )
-
-    # 6. CUMULATIEF = ALLES MET EEN C
-    df["is_cumulative"] = raw_rr.str.contains("C", case=False)
-
-    # 7. NUMERIEKE WAARDE = ALLES VOOR DE EERSTE C
-    df["rr_value"] = raw_rr.str.replace(r"[cC].*", "", regex=True)
+    # Haal numerieke waarde eruit
+    df["rr_value"] = raw.str.replace(r"[cC].*", "", regex=True)
     df["rr_value"] = pd.to_numeric(df["rr_value"], errors="coerce")
 
-    # 8. DAGWAARDE = NIET-CUMULATIEF
+    # Dagwaarde = niet-cumulatief
     df["rr"] = df["rr_value"]
     df.loc[df["is_cumulative"], "rr"] = None
 
-    # 9. Datum
-    if "date" in df.columns:
-        df["date"] = pd.to_datetime(df["date"], errors="coerce")
-    else:
-        df["date"] = pd.to_datetime(df[["year", "month", "day"]], errors="coerce")
-
-    # 10. StationID fallback
-    if "stationid" not in df.columns:
-        df["stationid"] = None
-
+    # Datum
+    df["date"] = pd.to_datetime(df["date"], errors="coerce")
     df["year"] = df["date"].dt.year
     df["month"] = df["date"].dt.month
     df["day"] = df["date"].dt.day
 
-    return df[["stationid", "rr", "rr_value", "is_cumulative", "date", "year", "month", "day"]]
-
-
-# ---------------------------------------------------------
-# Analysefunctie
-# ---------------------------------------------------------
-def generate_analysis(total26, total25, avg26, avg25,
-                      max_avg26, max_avg25,
-                      max_station26, max_station25,
-                      season, month_name):
-
-    diff_total = total26 - total25
-    perc_total = (diff_total / total25 * 100) if total25 > 0 else 0
-
-    if diff_total > 0:
-        trend_text = f"In {month_name} 2026 viel {abs(perc_total):.1f}% meer neerslag dan in {month_name} 2025."
-    elif diff_total < 0:
-        trend_text = f"In {month_name} 2026 viel {abs(perc_total):.1f}% minder neerslag dan in {month_name} 2025."
-    else:
-        trend_text = f"In {month_name} 2026 viel ongeveer dezelfde hoeveelheid neerslag als in {month_name} 2025."
-
-    if max_station26 > max_station25:
-        intensity_text = (
-            f"De hoogste stationwaarde in 2026 was {max_station26:.1f} mm, "
-            f"tegenover {max_station25:.1f} mm in 2025."
-        )
-    elif max_station26 < max_station25:
-        intensity_text = (
-            f"De hoogste stationwaarde in 2026 was {max_station26:.1f} mm, "
-            f"lager dan de {max_station25:.1f} mm in 2025."
-        )
-    else:
-        intensity_text = f"De hoogste stationwaarden waren gelijk ({max_station26:.1f} mm)."
-
-    summary = f"{month_name} valt in de **{season}**, wat helpt om de regenpatronen te interpreteren."
-
-    return f"""
-### 📘 Analyse — {month_name}
-
-**Regenvalverschil:**  
-{trend_text}
-
-**Intensiteit:**  
-De hoogste *gemiddelde* dagneerslag was {max_avg26:.1f} mm in 2026 en {max_avg25:.1f} mm in 2025.  
-{intensity_text}
-
-**Seizoenscontext:**  
-{summary}
-"""
+    return df
 
 
 # ---------------------------------------------------------
@@ -131,19 +102,17 @@ month_names = {
 month = st.selectbox("Kies maand:", list(month_names.keys()), format_func=lambda x: month_names[x])
 
 # ---------------------------------------------------------
-# Data laden + uniformiseren
+# DATA LADEN
 # ---------------------------------------------------------
 df_2025 = uniformize(load_rr(2025))
 df_2026 = uniformize(load_rr(2026))
 
-df_2025["season"] = df_2025.apply(assign_season, axis=1)
-df_2026["season"] = df_2026.apply(assign_season, axis=1)
-
 df_2025_m = df_2025[df_2025["month"] == month]
 df_2026_m = df_2026[df_2026["month"] == month]
 
+
 # ---------------------------------------------------------
-# Mode 1 — Geheel Suriname
+# MODE 1 — GEHEEL SURINAME
 # ---------------------------------------------------------
 if mode == "Geheel Suriname (WMO‑gemiddelde)":
 
@@ -157,17 +126,14 @@ if mode == "Geheel Suriname (WMO‑gemiddelde)":
 
     colA, colB = st.columns(2)
 
-    # ⭐ Totalen en gemiddelden: rr_value (incl. cumulatief)
     total26 = df_2026_m["rr_value"].sum()
     total25 = df_2025_m["rr_value"].sum()
     avg26 = df_2026_m["rr_value"].mean()
     avg25 = df_2025_m["rr_value"].mean()
 
-    # ⭐ Max gemiddelde dagneerslag
     max_avg26 = df26_daily["rr"].max() if not df26_daily.empty else 0
     max_avg25 = df25_daily["rr"].max() if not df25_daily.empty else 0
 
-    # ⭐ Max stationwaarde: alleen dagwaarden (cumulatief uitgesloten)
     valid_rr_26 = df_2026_m.loc[~df_2026_m["is_cumulative"], "rr_value"]
     valid_rr_25 = df_2025_m.loc[~df_2025_m["is_cumulative"], "rr_value"]
 
@@ -200,27 +166,9 @@ if mode == "Geheel Suriname (WMO‑gemiddelde)":
                       title=f"2025 — {month_names[month]}")
         st.plotly_chart(fig2, use_container_width=True)
 
-    season_for_text = (
-        df_2026_m["season"].iloc[0]
-        if not df_2026_m.empty
-        else df_2025_m["season"].iloc[0]
-        if not df_2025_m.empty
-        else "het betreffende seizoen"
-    )
-
-    st.markdown(
-        generate_analysis(
-            total26, total25,
-            avg26, avg25,
-            max_avg26, max_avg25,
-            max_station26, max_station25,
-            season_for_text,
-            month_names[month]
-        )
-    )
 
 # ---------------------------------------------------------
-# Mode 2 — Per station
+# MODE 2 — PER STATION
 # ---------------------------------------------------------
 else:
     all_stations = sorted(
@@ -231,20 +179,17 @@ else:
     df26_s = df_2026_m[df_2026_m["stationid"] == station].copy()
     df25_s = df_2025_m[df_2025_m["stationid"] == station].copy()
 
-    # LABEL CUMULATIEF
     df26_s["label"] = df26_s.apply(lambda r: "Cumulatief" if r["is_cumulative"] else "Dagwaarde", axis=1)
     df25_s["label"] = df25_s.apply(lambda r: "Cumulatief" if r["is_cumulative"] else "Dagwaarde", axis=1)
 
     df26_s["rr"] = df26_s["rr"].round(1)
     df25_s["rr"] = df25_s["rr"].round(1)
 
-    # ⭐ Totalen en gemiddelden: rr_value
     total26 = df26_s["rr_value"].sum()
     total25 = df25_s["rr_value"].sum()
     avg26 = df26_s["rr_value"].mean()
     avg25 = df25_s["rr_value"].mean()
 
-    # ⭐ Max: alleen dagwaarden (cumulatief uitgesloten)
     valid_rr_26 = df26_s.loc[~df26_s["is_cumulative"], "rr_value"]
     valid_rr_25 = df25_s.loc[~df25_s["is_cumulative"], "rr_value"]
 
@@ -282,22 +227,3 @@ else:
                           labels={"day": "Dag", "rr": "Neerslag (mm)", "label": "Type"},
                           title=f"2025 — {station}")
             st.plotly_chart(fig2, use_container_width=True)
-
-    season_for_text = (
-        df26_s["season"].iloc[0]
-        if not df26_s.empty
-        else df25_s["season"].iloc[0]
-        if not df25_s.empty
-        else "het betreffende seizoen"
-    )
-
-    st.markdown(
-        generate_analysis(
-            total26, total25,
-            avg26, avg25,
-            max26, max25,
-            max26, max25,
-            season_for_text,
-            month_names[month]
-        )
-    )
