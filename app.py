@@ -23,9 +23,7 @@ def load_rr(year: int) -> pd.DataFrame:
     xls = pd.ExcelFile(path)
     frames = []
 
-    # -------------------------
-    # 2025 — 1 sheet: RR_2025
-    # -------------------------
+    # 2025: 1 sheet RR_2025 met PRECIP
     if year == 2025:
         df = pd.read_excel(path, sheet_name="RR_2025")
 
@@ -45,21 +43,16 @@ def load_rr(year: int) -> pd.DataFrame:
         df = df[["date", "latitude", "longitude", "stationid", "rain_raw"]]
         frames.append(df)
 
-    # -------------------------
-    # 2026 — meerdere sheets
-    # -------------------------
+    # 2026: alle sheets met Rainfall/precip/rr
     else:
         for sheet in xls.sheet_names:
             df = pd.read_excel(path, sheet_name=sheet)
-
             df.columns = [c.strip().lower() for c in df.columns]
 
-            # verplichte kolommen
             for col in ["date", "latitude", "longitude", "stationid"]:
                 if col not in df.columns:
                     df[col] = None
 
-            # neerslagkolom zoeken
             rain_col = None
             for c in df.columns:
                 if "rainfall" in c or "precip" in c or c == "rr":
@@ -80,7 +73,7 @@ def load_rr(year: int) -> pd.DataFrame:
 
 
 # ---------------------------------------------------------
-# UNIFORMIZER — verwijdert ALLE cumulatieven (C)
+# UNIFORMIZER — cumulatieven eruit
 # ---------------------------------------------------------
 def uniformize(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
@@ -134,6 +127,21 @@ df_2025_m = df_2025[df_2025["month"] == month]
 df_2026_m = df_2026[df_2026["month"] == month]
 
 # ---------------------------------------------------------
+# HELPER: seizoensnaam
+# ---------------------------------------------------------
+def season_from_month(m: int) -> str:
+    if m in [12, 1, 2]:
+        return "Kleine regentijd"
+    if m in [3, 4]:
+        return "Kleine droge tijd"
+    if m in [5, 6, 7]:
+        return "Grote regentijd"
+    if m in [8, 9, 10, 11]:
+        return "Grote droge tijd"
+    return ""
+
+
+# ---------------------------------------------------------
 # MODE 1 — GEHEEL SURINAME
 # ---------------------------------------------------------
 if mode == "Geheel Suriname (WMO‑gemiddelde)":
@@ -181,6 +189,25 @@ if mode == "Geheel Suriname (WMO‑gemiddelde)":
                       labels={"day": "Dag", "rr": "Neerslag (mm)"},
                       title=f"2025 — {month_names[month]}")
         st.plotly_chart(fig2, use_container_width=True)
+
+    # ----------------- ANALYSEBLOK ONDER GRAFIEKEN -----------------
+    st.markdown("### 📌 Analyse (geheel Suriname)")
+    st.markdown(
+        f"- In **{month_names[month]} 2026** viel in totaal ongeveer **{total26:.1f} mm** regen, "
+        f"met een gemiddelde van **{avg26:.1f} mm/dag**.\n"
+        f"- In **{month_names[month]} 2025** viel in totaal ongeveer **{total25:.1f} mm** regen, "
+        f"met een gemiddelde van **{avg25:.1f} mm/dag**.\n"
+        f"- De hoogste WMO‑gemiddelde dagneerslag was **{max_avg26:.1f} mm** in 2026 en "
+        f"**{max_avg25:.1f} mm** in 2025."
+    )
+
+    # ----------------- SEIZOENEN-TEKST -----------------
+    season = season_from_month(month)
+    if season:
+        st.markdown(
+            f"**Seizoen:** {season} — deze maand valt binnen de *{season.lower()}* volgens de "
+            f"klimatologische indeling voor Suriname."
+        )
 
 # ---------------------------------------------------------
 # MODE 2 — PER STATION
@@ -242,3 +269,17 @@ else:
                           labels={"day": "Dag", "rr": "Neerslag (mm)", "label": "Type"},
                           title=f"2025 — {station}")
             st.plotly_chart(fig2, use_container_width=True)
+
+    # ----------------- ANALYSEBLOK ONDER GRAFIEKEN -----------------
+    st.markdown(f"### 📌 Analyse voor station {station}")
+    st.markdown(
+        f"- In **{month_names[month]} 2026** viel bij station **{station}** in totaal ongeveer **{total26:.1f} mm**.\n"
+        f"- In **{month_names[month]} 2025** viel bij station **{station}** in totaal ongeveer **{total25:.1f} mm**.\n"
+        f"- De hoogste dagneerslag (niet‑cumulatief) was **{max26:.1f} mm** in 2026 en **{max25:.1f} mm** in 2025."
+    )
+
+    season = season_from_month(month)
+    if season:
+        st.markdown(
+            f"**Seizoen:** {season} — deze maand valt binnen de *{season.lower()}* voor dit station."
+        )
