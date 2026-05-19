@@ -23,7 +23,9 @@ def load_rr(year: int) -> pd.DataFrame:
     xls = pd.ExcelFile(path)
     frames = []
 
-    # 2025: 1 sheet RR_2025 met PRECIP
+    # -------------------------
+    # 2025 — 1 sheet RR_2025
+    # -------------------------
     if year == 2025:
         df = pd.read_excel(path, sheet_name="RR_2025")
 
@@ -43,7 +45,9 @@ def load_rr(year: int) -> pd.DataFrame:
         df = df[["date", "latitude", "longitude", "stationid", "rain_raw"]]
         frames.append(df)
 
-    # 2026: alle sheets met Rainfall/precip/rr
+    # -------------------------
+    # 2026 — meerdere sheets
+    # -------------------------
     else:
         for sheet in xls.sheet_names:
             df = pd.read_excel(path, sheet_name=sheet)
@@ -73,7 +77,7 @@ def load_rr(year: int) -> pd.DataFrame:
 
 
 # ---------------------------------------------------------
-# UNIFORMIZER — cumulatieven eruit
+# UNIFORMIZER — cumulatieven eruit voor statistiek
 # ---------------------------------------------------------
 def uniformize(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
@@ -87,6 +91,7 @@ def uniformize(df: pd.DataFrame) -> pd.DataFrame:
     df["rr_value"] = raw.str.replace(r"[cC].*", "", regex=True)
     df["rr_value"] = pd.to_numeric(df["rr_value"], errors="coerce")
 
+    # rr = dagwaarde (zonder cumulatief)
     df["rr"] = df["rr_value"]
     df.loc[df["is_cumulative"], "rr"] = None
 
@@ -157,7 +162,7 @@ if mode == "Geheel Suriname (WMO‑gemiddelde)":
     colA, colB = st.columns(2)
 
     total26 = df_2026_m["rr_value"].sum()
-    total25 = df_2025_m["rr_value"].sum()
+    total25 = df_2022025_m["rr_value"].sum()
     avg26 = df_2026_m["rr_value"].mean()
     avg25 = df_2025_m["rr_value"].mean()
 
@@ -190,24 +195,21 @@ if mode == "Geheel Suriname (WMO‑gemiddelde)":
                       title=f"2025 — {month_names[month]}")
         st.plotly_chart(fig2, use_container_width=True)
 
-    # ----------------- ANALYSEBLOK ONDER GRAFIEKEN -----------------
+    # ----------------- ANALYSEBLOK -----------------
     st.markdown("### 📌 Analyse (geheel Suriname)")
     st.markdown(
-        f"- In **{month_names[month]} 2026** viel in totaal ongeveer **{total26:.1f} mm** regen, "
-        f"met een gemiddelde van **{avg26:.1f} mm/dag**.\n"
-        f"- In **{month_names[month]} 2025** viel in totaal ongeveer **{total25:.1f} mm** regen, "
-        f"met een gemiddelde van **{avg25:.1f} mm/dag**.\n"
-        f"- De hoogste WMO‑gemiddelde dagneerslag was **{max_avg26:.1f} mm** in 2026 en "
-        f"**{max_avg25:.1f} mm** in 2025."
+        f"- In **{month_names[month]} 2026** viel in totaal **{total26:.1f} mm** regen.\n"
+        f"- In **{month_names[month]} 2025** viel in totaal **{total25:.1f} mm** regen.\n"
+        f"- De hoogste WMO‑gemiddelde dagneerslag was **{max_avg26:.1f} mm** in 2026 "
+        f"en **{max_avg25:.1f} mm** in 2025."
     )
 
-    # ----------------- SEIZOENEN-TEKST -----------------
+    # ----------------- SEIZOEN -----------------
     season = season_from_month(month)
-    if season:
-        st.markdown(
-            f"**Seizoen:** {season} — deze maand valt binnen de *{season.lower()}* volgens de "
-            f"klimatologische indeling voor Suriname."
-        )
+    st.markdown(
+        f"🌦️ **Seizoen:** {season} — deze maand valt binnen de *{season.lower()}*."
+    )
+
 
 # ---------------------------------------------------------
 # MODE 2 — PER STATION
@@ -224,9 +226,34 @@ else:
     df26_s["label"] = df26_s.apply(lambda r: "Cumulatief" if r["is_cumulative"] else "Dagwaarde", axis=1)
     df25_s["label"] = df25_s.apply(lambda r: "Cumulatief" if r["is_cumulative"] else "Dagwaarde", axis=1)
 
-    df26_s["rr"] = df26_s["rr"].round(1)
-    df25_s["rr"] = df25_s["rr"].round(1)
+    # grafiek moet rr_value gebruiken (dagwaarde + cumulatief zichtbaar)
+    col1, col2 = st.columns(2)
 
+    with col1:
+        fig1 = px.bar(
+            df26_s,
+            x="day",
+            y="rr_value",
+            color="label",
+            color_discrete_map={"Dagwaarde": "blue", "Cumulatief": "red"},
+            labels={"day": "Dag", "rr_value": "Neerslag (mm)", "label": "Type"},
+            title=f"2026 — {station}"
+        )
+        st.plotly_chart(fig1, use_container_width=True)
+
+    with col2:
+        fig2 = px.bar(
+            df25_s,
+            x="day",
+            y="rr_value",
+            color="label",
+            color_discrete_map={"Dagwaarde": "blue", "Cumulatief": "red"},
+            labels={"day": "Dag", "rr_value": "Neerslag (mm)", "label": "Type"},
+            title=f"2025 — {station}"
+        )
+        st.plotly_chart(fig2, use_container_width=True)
+
+    # ----------------- ANALYSE -----------------
     total26 = df26_s["rr_value"].sum()
     total25 = df25_s["rr_value"].sum()
     avg26 = df26_s["rr_value"].mean()
@@ -238,48 +265,18 @@ else:
     max26 = valid_rr_26.max() if not valid_rr_26.dropna().empty else 0
     max25 = valid_rr_25.max() if not valid_rr_25.dropna().empty else 0
 
-    colA, colB = st.columns(2)
-
-    with colA:
-        st.subheader(f"📊 Statistieken — 2026 ({station})")
-        st.metric("Totaal (mm)", round(total26, 1))
-        st.metric("Gemiddelde (mm/dag)", round(avg26, 1))
-        st.metric("Max dagneerslag (mm)", round(max26, 1))
-
-    with colB:
-        st.subheader(f"📊 Statistieken — 2025 ({station})")
-        st.metric("Totaal (mm)", round(total25, 1))
-        st.metric("Gemiddelde (mm/dag)", round(avg25, 1))
-        st.metric("Max dagneerslag (mm)", round(max25, 1))
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-        if not df26_s.empty:
-            fig1 = px.bar(df26_s, x="day", y="rr", color="label",
-                          color_discrete_map={"Dagwaarde": "blue", "Cumulatief": "red"},
-                          labels={"day": "Dag", "rr": "Neerslag (mm)", "label": "Type"},
-                          title=f"2026 — {station}")
-            st.plotly_chart(fig1, use_container_width=True)
-
-    with col2:
-        if not df25_s.empty:
-            fig2 = px.bar(df25_s, x="day", y="rr", color="label",
-                          color_discrete_map={"Dagwaarde": "blue", "Cumulatief": "red"},
-                          labels={"day": "Dag", "rr": "Neerslag (mm)", "label": "Type"},
-                          title=f"2025 — {station}")
-            st.plotly_chart(fig2, use_container_width=True)
-
-    # ----------------- ANALYSEBLOK ONDER GRAFIEKEN -----------------
     st.markdown(f"### 📌 Analyse voor station {station}")
     st.markdown(
-        f"- In **{month_names[month]} 2026** viel bij station **{station}** in totaal ongeveer **{total26:.1f} mm**.\n"
-        f"- In **{month_names[month]} 2025** viel bij station **{station}** in totaal ongeveer **{total25:.1f} mm**.\n"
-        f"- De hoogste dagneerslag (niet‑cumulatief) was **{max26:.1f} mm** in 2026 en **{max25:.1f} mm** in 2025."
+        f"- In **{month_names[month]} 2026** viel bij station **{station}** "
+        f"in totaal **{total26:.1f} mm** regen.\n"
+        f"- In **{month_names[month]} 2025** viel bij station **{station}** "
+        f"in totaal **{total25:.1f} mm** regen.\n"
+        f"- De hoogste dagneerslag (niet‑cumulatief) was **{max26:.1f} mm** in 2026 "
+        f"en **{max25:.1f} mm** in 2025."
     )
 
+    # ----------------- SEIZOEN -----------------
     season = season_from_month(month)
-    if season:
-        st.markdown(
-            f"**Seizoen:** {season} — deze maand valt binnen de *{season.lower()}* voor dit station."
-        )
+    st.markdown(
+        f"🌦️ **Seizoen:** {season} — deze maand valt binnen de *{season.lower()}*."
+    )
