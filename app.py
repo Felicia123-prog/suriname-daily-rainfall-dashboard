@@ -7,7 +7,7 @@ from utils.seasons import assign_season
 st.set_page_config(page_title="Maandelijkse Neerslagrapportage 2025–2026", layout="wide")
 
 # ---------------------------------------------------------
-# WMO-CORRECTE SUPER-UNIFORMIZER
+# WMO-CORRECTE SUPER-UNIFORMIZER (ULTRA ROBUST)
 # ---------------------------------------------------------
 def uniformize(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
@@ -16,15 +16,21 @@ def uniformize(df: pd.DataFrame) -> pd.DataFrame:
     # 1. Neerslagkolom zoeken
     rain_cols = [c for c in df.columns if "rain" in c or "precip" in c or c == "rr"]
     if len(rain_cols) > 0:
-        raw_rr = df[rain_cols[0]].astype(str).str.strip()
+        raw_rr = df[rain_cols[0]].astype(str)
     else:
         raw_rr = pd.Series([None] * len(df))
 
-    # 2. Cumulatieve waarden detecteren (alles met 'C' erin)
-    df["is_cumulative"] = raw_rr.str.contains("c", case=False, regex=False)
+    # 1b. ALLE spaties verwijderen (incl. unicode NBSP)
+    raw_rr = raw_rr.str.replace("\u00A0", "", regex=False)  # NBSP
+    raw_rr = raw_rr.str.replace(" ", "", regex=False)       # gewone spatie
+    raw_rr = raw_rr.str.strip()
 
-    # 3. Numerieke waarde eruit halen
-    df["rr_value"] = raw_rr.str.replace("c", "", case=False, regex=False)
+    # 2. Cumulatieve waarden detecteren (super‑robust)
+    # Match elke C of c gevolgd door een woordgrens → vangt ALLES
+    df["is_cumulative"] = raw_rr.str.contains(r"[cC]\b", regex=True)
+
+    # 3. Numerieke waarde eruit halen (verwijder alles vanaf C)
+    df["rr_value"] = raw_rr.str.replace(r"[cC]\b.*", "", regex=True)
     df["rr_value"] = pd.to_numeric(df["rr_value"], errors="coerce")
 
     # 4. Alleen dagwaarden voor max
