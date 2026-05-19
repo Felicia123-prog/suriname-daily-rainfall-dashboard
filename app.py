@@ -13,40 +13,46 @@ def uniformize(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
     df.columns = [c.strip().lower() for c in df.columns]
 
-    # 1. Neerslagkolom zoeken
-    rain_cols = [c for c in df.columns if "rain" in c or "precip" in c or c == "rr"]
+    # 1. Neerslagkolom zoeken (maakt niet uit hoe hij heet)
+    rain_cols = [c for c in df.columns if any(k in c.lower() for k in ["rr", "rain", "precip", "waarde", "value"])]
     if len(rain_cols) > 0:
         raw_rr = df[rain_cols[0]]
     else:
         raw_rr = pd.Series([None] * len(df))
 
-    # 2. FORCEER ALLES NAAR PURE TEKST
+    # 2. FORCEER ALLES NAAR TEKST (ook numbers → text)
     raw_rr = raw_rr.apply(lambda x: str(x).strip())
 
-    # 3. NORMALISEER ALLE UNICODE (maakt rare C’s → normale C)
+    # 3. NORMALISEER UNICODE (maakt rare C’s → normale C)
     raw_rr = raw_rr.str.normalize("NFKD").str.encode("ascii", "ignore").str.decode("ascii")
 
-    # 4. VERWIJDER ALLE WHITESPACE (incl. NBSP, tabs, newlines)
+    # 4. VERWIJDER ALLE WHITESPACE
     raw_rr = raw_rr.str.replace(r"\s+", "", regex=True)
 
-    # 5. CUMULATIEF = ALLES MET EEN 'C' ERIN
-    df["is_cumulative"] = raw_rr.str.contains("C", case=False, regex=False)
+    # 5. ALS EXCEL DE C VERBERGT (number + formatting) → FORCEER C
+    raw_rr = raw_rr.mask(
+        raw_rr.str.match(r"^\d+$") & df[rain_cols[0]].astype(str).str.contains("C", case=False),
+        raw_rr + "C"
+    )
 
-    # 6. NUMERIEKE WAARDE = ALLES VOOR DE EERSTE C
+    # 6. CUMULATIEF = ALLES MET EEN C
+    df["is_cumulative"] = raw_rr.str.contains("C", case=False)
+
+    # 7. NUMERIEKE WAARDE = ALLES VOOR DE EERSTE C
     df["rr_value"] = raw_rr.str.replace(r"[cC].*", "", regex=True)
     df["rr_value"] = pd.to_numeric(df["rr_value"], errors="coerce")
 
-    # 7. DAGWAARDE = ALLEEN NIET-CUMULATIEF
+    # 8. DAGWAARDE = NIET-CUMULATIEF
     df["rr"] = df["rr_value"]
     df.loc[df["is_cumulative"], "rr"] = None
 
-    # 8. Datum
+    # 9. Datum
     if "date" in df.columns:
         df["date"] = pd.to_datetime(df["date"], errors="coerce")
     else:
         df["date"] = pd.to_datetime(df[["year", "month", "day"]], errors="coerce")
 
-    # 9. StationID fallback
+    # 10. StationID fallback
     if "stationid" not in df.columns:
         df["stationid"] = None
 
@@ -225,6 +231,10 @@ else:
     df26_s = df_2026_m[df_2026_m["stationid"] == station].copy()
     df25_s = df_2025_m[df_2025_m["stationid"] == station].copy()
 
+    # LABEL CUMULATIEF
+    df26_s["label"] = df26_s.apply(lambda r: "Cumulatief" if r["is_cumulative"] else "Dagwaarde", axis=1)
+    df25_s["label"] = df25_s.apply(lambda r: "Cumulatief" if r["is_cumulative"] else "Dagwaarde", axis=1)
+
     df26_s["rr"] = df26_s["rr"].round(1)
     df25_s["rr"] = df25_s["rr"].round(1)
 
@@ -259,15 +269,17 @@ else:
 
     with col1:
         if not df26_s.empty:
-            fig1 = px.bar(df26_s, x="day", y="rr",
-                          labels={"day": "Dag", "rr": "Neerslag (mm)"},
+            fig1 = px.bar(df26_s, x="day", y="rr", color="label",
+                          color_discrete_map={"Dagwaarde": "blue", "Cumulatief": "red"},
+                          labels={"day": "Dag", "rr": "Neerslag (mm)", "label": "Type"},
                           title=f"2026 — {station}")
             st.plotly_chart(fig1, use_container_width=True)
 
     with col2:
         if not df25_s.empty:
-            fig2 = px.bar(df25_s, x="day", y="rr",
-                          labels={"day": "Dag", "rr": "Neerslag (mm)"},
+            fig2 = px.bar(df25_s, x="day", y="rr", color="label",
+                          color_discrete_map={"Dagwaarde": "blue", "Cumulatief": "red"},
+                          labels={"day": "Dag", "rr": "Neerslag (mm)", "label": "Type"},
                           title=f"2025 — {station}")
             st.plotly_chart(fig2, use_container_width=True)
 
