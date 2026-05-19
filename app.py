@@ -162,7 +162,7 @@ if mode == "Geheel Suriname (WMO‑gemiddelde)":
     colA, colB = st.columns(2)
 
     total26 = df_2026_m["rr_value"].sum()
-    total25 = df_2022025_m["rr_value"].sum()
+    total25 = df_2025_m["rr_value"].sum()
     avg26 = df_2026_m["rr_value"].mean()
     avg25 = df_2025_m["rr_value"].mean()
 
