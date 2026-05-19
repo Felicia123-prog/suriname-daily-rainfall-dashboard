@@ -54,6 +54,8 @@ def uniformize(df: pd.DataFrame) -> pd.DataFrame:
 
     return df[["stationid", "rr", "rr_value", "is_cumulative", "date", "year", "month", "day"]]
 
+debug = df_2026_m[df_2026_m["rr_value"] == 180]
+st.write("DEBUG 180-waarden:", debug)
 
 # ---------------------------------------------------------
 # Analysefunctie
