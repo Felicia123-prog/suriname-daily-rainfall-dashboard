@@ -246,19 +246,23 @@ else:
     max26 = valid_rr_26.max() if not valid_rr_26.dropna().empty else 0
     max25 = valid_rr_25.max() if not valid_rr_25.dropna().empty else 0
 
+    # ⭐ DAG VAN MAX TOEVOEGEN
+    day_max26 = df26_s.loc[df26_s["rr_value"] == max26, "day"].iloc[0] if max26 > 0 else "-"
+    day_max25 = df25_s.loc[df25_s["rr_value"] == max25, "day"].iloc[0] if max25 > 0 else "-"
+
     colA, colB = st.columns(2)
 
     with colA:
         st.subheader(f"📊 Statistieken — 2026 ({station})")
         st.metric("Totaal (mm)", round(total26, 1))
         st.metric("Gemiddelde (mm/dag)", round(avg26, 1))
-        st.metric("Hoogste dagneerslag (mm)", round(max26, 1))
+        st.metric("Hoogste dagneerslag (mm)", f"{max26:.1f} (dag {day_max26})")
 
     with colB:
         st.subheader(f"📊 Statistieken — 2025 ({station})")
         st.metric("Totaal (mm)", round(total25, 1))
         st.metric("Gemiddelde (mm/dag)", round(avg25, 1))
-        st.metric("Hoogste dagneerslag (mm)", round(max25, 1))
+        st.metric("Hoogste dagneerslag (mm)", f"{max25:.1f} (dag {day_max25})")
 
     # ----------------- GRAFIEKEN -----------------
     col1, col2 = st.columns(2)
@@ -287,15 +291,15 @@ else:
         )
         st.plotly_chart(fig2, use_container_width=True)
 
-    # ----------------- ANALYSE (originele stijl) -----------------
+    # ----------------- ANALYSE (met dag van max) -----------------
     st.markdown(f"### 📌 Analyse voor station {station}")
     st.markdown(
         f"In **{month_names[month]} 2026** registreerde station **{station}** een totale "
-        f"neerslag van **{total26:.1f} mm**. De hoogste dagwaarde (niet‑cumulatief) kwam uit op "
-        f"**{max26:.1f} mm**.\n\n"
+        f"neerslag van **{total26:.1f} mm**. De hoogste dagwaarde (niet‑cumulatief) was "
+        f"**{max26:.1f} mm**, gemeten op **dag {day_max26}**.\n\n"
 
         f"In **{month_names[month]} 2025** lag de totale neerslag op **{total25:.1f} mm**, "
-        f"met een maximale dagwaarde van **{max25:.1f} mm**.\n\n"
+        f"met een maximale dagwaarde van **{max25:.1f} mm**, gemeten op **dag {day_max25}**.\n\n"
 
         f"Het verschil tussen beide jaren laat zien hoe variabel de regenval kan zijn op dit station."
     )
@@ -306,3 +310,4 @@ else:
         f"🌦️ **Seizoen:** {season} — deze maand valt binnen de *{season.lower()}*, "
         f"wat duidelijk terug te zien is in het neerslagpatroon van dit station."
     )
+
