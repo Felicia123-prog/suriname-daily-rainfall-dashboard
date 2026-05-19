@@ -7,26 +7,32 @@ from utils.seasons import assign_season
 st.set_page_config(page_title="Maandelijkse Neerslagrapportage 2025–2026", layout="wide")
 
 # ---------------------------------------------------------
-# SUPER-UNIFORMIZER — verwijdert ALLES behalve RR, stationid, date
+# WMO-CORRECTE SUPER-UNIFORMIZER
+# - herkent cumulatieve waarden (180C)
+# - rr_value = numerieke waarde (incl. cumulatief)
+# - rr = alleen dagwaarden (cumulatief uitgesloten)
 # ---------------------------------------------------------
 def uniformize(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
-
-    # 1. Kolomnamen normaliseren
     df.columns = [c.strip().lower() for c in df.columns]
 
-    # 2. Alleen relevante kolommen behouden
-    keep = ["stationid", "rr", "date", "year", "month", "day"]
-    df = df[[c for c in df.columns if c in keep]]
+    # 1. Neerslagkolom zoeken
+    rain_cols = [c for c in df.columns if "rain" in c or "precip" in c or c == "rr"]
+    if len(rain_cols) > 0:
+        raw_rr = df[rain_cols[0]].astype(str)
+    else:
+        raw_rr = pd.Series([None] * len(df))
 
-    # 3. StationID
-    if "stationid" not in df.columns:
-        df["stationid"] = None
+    # 2. Cumulatieve waarden detecteren (eindigen op C)
+    df["is_cumulative"] = raw_rr.str.endswith("c", na=False) | raw_rr.str.endswith("C", na=False)
 
-    # 4. RR
-    if "rr" not in df.columns:
-        df["rr"] = None
-    df["rr"] = pd.to_numeric(df["rr"], errors="coerce")
+    # 3. Numerieke waarde eruit halen (voor totalen/gemiddelden)
+    df["rr_value"] = raw_rr.str.replace("c", "", case=False).astype(str)
+    df["rr_value"] = pd.to_numeric(df["rr_value"], errors="coerce")
+
+    # 4. Alleen dagwaarden voor max/grafieken
+    df["rr"] = df["rr_value"]
+    df.loc[df["is_cumulative"], "rr"] = None
 
     # 5. Datum
     if "date" in df.columns:
@@ -34,12 +40,16 @@ def uniformize(df: pd.DataFrame) -> pd.DataFrame:
     else:
         df["date"] = pd.to_datetime(df[["year", "month", "day"]], errors="coerce")
 
-    # 6. Year / Month / Day opnieuw afleiden
+    # 6. StationID
+    if "stationid" not in df.columns:
+        df["stationid"] = None
+
+    # 7. Year / Month / Day opnieuw afleiden
     df["year"] = df["date"].dt.year
     df["month"] = df["date"].dt.month
     df["day"] = df["date"].dt.day
 
-    return df
+    return df[["stationid", "rr", "rr_value", "is_cumulative", "date", "year", "month", "day"]]
 
 
 # ---------------------------------------------------------
@@ -126,6 +136,7 @@ df_2026_m = df_2026[df_2026["month"] == month]
 # ---------------------------------------------------------
 if mode == "Geheel Suriname (WMO‑gemiddelde)":
 
+    # Daggemiddelden per dag (alleen dagwaarden, dus rr)
     df26_daily = df_2026_m.groupby("day")["rr"].mean().round(1).reset_index()
     df25_daily = df_2025_m.groupby("day")["rr"].mean().round(1).reset_index()
 
@@ -136,14 +147,17 @@ if mode == "Geheel Suriname (WMO‑gemiddelde)":
 
     colA, colB = st.columns(2)
 
-    total26 = df26_daily["rr"].sum()
-    total25 = df25_daily["rr"].sum()
-    avg26 = df26_daily["rr"].mean()
-    avg25 = df25_daily["rr"].mean()
+    # ⭐ Totalen en gemiddelden: rr_value (incl. cumulatief)
+    total26 = df_2026_m["rr_value"].sum()
+    total25 = df_2025_m["rr_value"].sum()
+    avg26 = df_2026_m["rr_value"].mean()
+    avg25 = df_2025_m["rr_value"].mean()
 
+    # ⭐ Max gemiddelde dagneerslag: op basis van daggemiddelden (rr)
     max_avg26 = df26_daily["rr"].max() if not df26_daily.empty else 0
     max_avg25 = df25_daily["rr"].max() if not df25_daily.empty else 0
 
+    # ⭐ Max stationwaarde: alleen dagwaarden (rr), cumulatief uitgesloten
     max_station26 = df_2026_m["rr"].max() if not df_2026_m.empty else 0
     max_station25 = df_2025_m["rr"].max() if not df_2025_m.empty else 0
 
@@ -162,15 +176,23 @@ if mode == "Geheel Suriname (WMO‑gemiddelde)":
     col1, col2 = st.columns(2)
 
     with col1:
-        fig1 = px.bar(df26_daily, x="day", y="rr",
-                      labels={"day": "Dag", "rr": "Neerslag (mm)"},
-                      title=f"2026 — {month_names[month]}")
+        fig1 = px.bar(
+            df26_daily,
+            x="day",
+            y="rr",
+            labels={"day": "Dag", "rr": "Neerslag (mm)"},
+            title=f"2026 — {month_names[month]}"
+        )
         st.plotly_chart(fig1, use_container_width=True)
 
     with col2:
-        fig2 = px.bar(df25_daily, x="day", y="rr",
-                      labels={"day": "Dag", "rr": "Neerslag (mm)"},
-                      title=f"2025 — {month_names[month]}")
+        fig2 = px.bar(
+            df25_daily,
+            x="day",
+            y="rr",
+            labels={"day": "Dag", "rr": "Neerslag (mm)"},
+            title=f"2025 — {month_names[month]}"
+        )
         st.plotly_chart(fig2, use_container_width=True)
 
     season_for_text = (
@@ -207,11 +229,13 @@ else:
     df26_s["rr"] = df26_s["rr"].round(1)
     df25_s["rr"] = df25_s["rr"].round(1)
 
-    total26 = df26_s["rr"].sum()
-    total25 = df25_s["rr"].sum()
-    avg26 = df26_s["rr"].mean()
-    avg25 = df25_s["rr"].mean()
+    # ⭐ Totalen en gemiddelden: rr_value (incl. cumulatief)
+    total26 = df26_s["rr_value"].sum()
+    total25 = df25_s["rr_value"].sum()
+    avg26 = df26_s["rr_value"].mean()
+    avg25 = df25_s["rr_value"].mean()
 
+    # ⭐ Max: alleen dagwaarden (rr), cumulatief uitgesloten
     max26 = df26_s["rr"].max() if not df26_s.empty else 0
     max25 = df25_s["rr"].max() if not df25_s.empty else 0
 
@@ -233,16 +257,24 @@ else:
 
     with col1:
         if not df26_s.empty:
-            fig1 = px.bar(df26_s, x="day", y="rr",
-                          labels={"day": "Dag", "rr": "Neerslag (mm)"},
-                          title=f"2026 — {station}")
+            fig1 = px.bar(
+                df26_s,
+                x="day",
+                y="rr",
+                labels={"day": "Dag", "rr": "Neerslag (mm)"},
+                title=f"2026 — {station}"
+            )
             st.plotly_chart(fig1, use_container_width=True)
 
     with col2:
         if not df25_s.empty:
-            fig2 = px.bar(df25_s, x="day", y="rr",
-                          labels={"day": "Dag", "rr": "Neerslag (mm)"},
-                          title=f"2025 — {station}")
+            fig2 = px.bar(
+                df25_s,
+                x="day",
+                y="rr",
+                labels={"day": "Dag", "rr": "Neerslag (mm)"},
+                title=f"2025 — {station}"
+            )
             st.plotly_chart(fig2, use_container_width=True)
 
     season_for_text = (
