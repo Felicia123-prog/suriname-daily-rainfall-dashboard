@@ -195,19 +195,26 @@ if mode == "Geheel Suriname (landelijk gemiddelde)":
                       title=f"2025 — {month_names[month]}")
         st.plotly_chart(fig2, use_container_width=True)
 
-    # ----------------- ANALYSE (originele stijl) -----------------
+    # ----------------- ANALYSE (originele stijl + dynamisch natter jaar) -----------------
+
+    # Bepalen welk jaar natter was
+    if total26 > total25:
+        wetter_year = "2026"
+    else:
+        wetter_year = "2025"
+
     st.markdown("### 📌 Analyse")
     st.markdown(
         f"In **{month_names[month]} 2026** zien we een totale neerslag van **{total26:.1f} mm**. "
         f"De regenval is vrij gelijkmatig verdeeld over de maand, met een piek rond de dagen "
         f"waar de gemiddelde dagneerslag oploopt tot **{max_avg26:.1f} mm**.\n\n"
         
-        f"In **{month_names[month]} 2025** lag de totale neerslag hoger (**{total25:.1f} mm**). "
+        f"In **{month_names[month]} 2025** lag de totale neerslag op **{total25:.1f} mm**. "
         f"De maand toont een duidelijker variatie tussen natte en drogere dagen, met een "
         f"hoogste gemiddelde dagneerslag van **{max_avg25:.1f} mm**.\n\n"
 
         f"Over het algemeen toont **{month_names[month]}** een duidelijk verschil tussen beide jaren, "
-        f"waarbij 2025 natter was dan 2026."
+        f"waarbij **{wetter_year}** natter was."
     )
 
     # ----------------- SEIZOEN -----------------
@@ -310,4 +317,3 @@ else:
         f"🌦️ **Seizoen:** {season} — deze maand valt binnen de *{season.lower()}*, "
         f"wat duidelijk terug te zien is in het neerslagpatroon van dit station."
     )
-
