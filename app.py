@@ -16,15 +16,24 @@ def uniformize(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
     df.columns = [c.strip().lower() for c in df.columns]
 
-    # 1. Neerslagkolom zoeken
-    rain_cols = [c for c in df.columns if "rain" in c or "precip" in c or c == "rr"]
-    if len(rain_cols) > 0:
-        raw_rr = df[rain_cols[0]].astype(str)
-    else:
-        raw_rr = pd.Series([None] * len(df))
+   # 1. Neerslagkolom zoeken
+rain_cols = [c for c in df.columns if "rain" in c or "precip" in c or c == "rr"]
+if len(rain_cols) > 0:
+    raw_rr = df[rain_cols[0]].astype(str).str.strip()
+else:
+    raw_rr = pd.Series([None] * len(df))
 
-    # 2. Cumulatieve waarden detecteren (eindigen op C)
-    df["is_cumulative"] = raw_rr.str.endswith("c", na=False) | raw_rr.str.endswith("C", na=False)
+# 2. Cumulatieve waarden detecteren (alles met 'C' erin)
+df["is_cumulative"] = raw_rr.str.contains("c", case=False, regex=False)
+
+# 3. Numerieke waarde eruit halen
+df["rr_value"] = raw_rr.str.replace("c", "", case=False, regex=False)
+df["rr_value"] = pd.to_numeric(df["rr_value"], errors="coerce")
+
+# 4. Alleen dagwaarden voor max
+df["rr"] = df["rr_value"]
+df.loc[df["is_cumulative"], "rr"] = None
+
 
     # 3. Numerieke waarde eruit halen (voor totalen/gemiddelden)
     df["rr_value"] = raw_rr.str.replace("c", "", case=False).astype(str)
