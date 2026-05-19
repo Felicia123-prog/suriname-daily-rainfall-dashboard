@@ -6,65 +6,82 @@ import os
 st.set_page_config(page_title="Maandelijkse Neerslagrapportage 2025–2026", layout="wide")
 
 # ---------------------------------------------------------
-# SLIMME LOADER — VINDT ALTIJD DE DATA-MAP
+# DATA LADEN
 # ---------------------------------------------------------
-def resolve_path(filename):
-    possible_paths = [
-        f"data/{filename}",
-        f"./data/{filename}",
-        f"/mount/src/suriname-daily-rainfall-dashboard/data/{filename}",
-        f"/app/data/{filename}",
-        filename
-    ]
-    for p in possible_paths:
-        if os.path.exists(p):
-            return p
-    st.error(f"❌ Bestand niet gevonden: {filename}")
-    st.write("Geprobeerde paden:", possible_paths)
-    st.stop()
+def load_rr(year: int) -> pd.DataFrame:
+    if year == 2026:
+        filename = "Rainfall_Data_Suriname_2026.xlsx"
+    else:
+        filename = "Rainfall_Data_Suriname_2025.xlsx"
 
-# ---------------------------------------------------------
-# LOAD ALL SHEETS FROM EXCEL
-# ---------------------------------------------------------
-def load_rr(year):
-    filename = (
-        "Rainfall_Data_Suriname_2026.xlsx"
-        if year == 2026
-        else "Rainfall_Data_Suriname_2025.xlsx"
-    )
+    path = os.path.join("data", filename)
 
-    path = resolve_path(filename)
+    if not os.path.exists(path):
+        st.error(f"Bestand niet gevonden: {path}")
+        st.stop()
+
     xls = pd.ExcelFile(path)
     frames = []
 
-    for sheet in xls.sheet_names:
-        df = pd.read_excel(path, sheet_name=sheet)
+    # 2025: 1 sheet RR_2025 met PRECIP
+    if year == 2025:
+        if "RR_2025" not in xls.sheet_names:
+            st.error("Sheet 'RR_2025' niet gevonden in 2025‑bestand.")
+            st.stop()
 
-        df.columns = [c.strip().lower() for c in df.columns]
+        df = pd.read_excel(path, sheet_name="RR_2025")
+        # Verwachte kolommen: StationId, Station_Name, Lat, Lon, Year, Month, Day, PRECIP
+        df.columns = [c.strip() for c in df.columns]
 
-        for col in ["date", "latitude", "longitude", "stationid"]:
-            if col not in df.columns:
-                df[col] = None
+        df = df.rename(columns={
+            "StationId": "StationID",
+            "Lat": "Latitude",
+            "Lon": "Longitude",
+            "PRECIP": "rain_raw"
+        })
 
-        rain_col = None
-        for c in df.columns:
-            if any(k in c for k in ["rain", "precip", "rr", "waarde", "value"]):
-                rain_col = c
-                break
+        # Maak een datumkolom
+        df["date"] = pd.to_datetime(
+            df[["Year", "Month", "Day"]].astype(int),
+            errors="coerce"
+        )
 
-        if rain_col is None:
-            continue
-
-        df = df[["date", "latitude", "longitude", "stationid", rain_col]]
-        df = df.rename(columns={rain_col: "rain_raw"})
+        df = df[["date", "Latitude", "Longitude", "StationID", "rain_raw"]]
         frames.append(df)
 
-    if frames:
-        return pd.concat(frames, ignore_index=True)
-    return pd.DataFrame()
+    # 2026: meerdere sheets met Rainfall (mm)
+    else:
+        for sheet in xls.sheet_names:
+            df = pd.read_excel(path, sheet_name=sheet)
+            df.columns = [c.strip().lower() for c in df.columns]
+
+            # verplichte kolommen
+            for col in ["date", "latitude", "longitude", "stationid"]:
+                if col not in df.columns:
+                    df[col] = None
+
+            # neerslagkolom zoeken
+            rain_col = None
+            for c in df.columns:
+                if "rainfall" in c or "precip" in c or c == "rr":
+                    rain_col = c
+                    break
+
+            if rain_col is None:
+                continue
+
+            df = df[["date", "latitude", "longitude", "stationid", rain_col]]
+            df = df.rename(columns={rain_col: "rain_raw"})
+            frames.append(df)
+
+    if not frames:
+        return pd.DataFrame()
+
+    return pd.concat(frames, ignore_index=True)
+
 
 # ---------------------------------------------------------
-# UNIFORMIZER — verwijdert ALLE cumulatieven
+# UNIFORMIZER — verwijdert ALLE cumulatieven (C)
 # ---------------------------------------------------------
 def uniformize(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
@@ -88,6 +105,7 @@ def uniformize(df: pd.DataFrame) -> pd.DataFrame:
 
     return df
 
+
 # ---------------------------------------------------------
 # UI
 # ---------------------------------------------------------
@@ -108,7 +126,7 @@ month_names = {
 month = st.selectbox("Kies maand:", list(month_names.keys()), format_func=lambda x: month_names[x])
 
 # ---------------------------------------------------------
-# DATA LADEN
+# DATA LADEN + OPSCHONEN
 # ---------------------------------------------------------
 df_2025 = uniformize(load_rr(2025))
 df_2026 = uniformize(load_rr(2026))
@@ -124,8 +142,8 @@ if mode == "Geheel Suriname (WMO‑gemiddelde)":
     df26_daily = df_2026_m.groupby("day")["rr"].mean().round(1).reset_index()
     df25_daily = df_2025_m.groupby("day")["rr"].mean().round(1).reset_index()
 
-    stations_2026 = df_2026_m["stationid"].nunique()
-    stations_2025 = df_2025_m["stationid"].nunique()
+    stations_2026 = df_2026_m["StationID"].nunique()
+    stations_2025 = df_2025_m["StationID"].nunique()
 
     st.info(f"📡 Beschikbare stations — 2026: **{stations_2026}** | 2025: **{stations_2025}**")
 
@@ -170,12 +188,12 @@ if mode == "Geheel Suriname (WMO‑gemiddelde)":
 # ---------------------------------------------------------
 else:
     all_stations = sorted(
-        set(df_2025["stationid"].dropna()).union(df_2026["stationid"].dropna())
+        set(df_2025["StationID"].dropna()).union(df_2026["StationID"].dropna())
     )
     station = st.selectbox("Kies station:", all_stations)
 
-    df26_s = df_2026_m[df_2026_m["stationid"] == station].copy()
-    df25_s = df_2025_m[df_2025_m["stationid"] == station].copy()
+    df26_s = df_2026_m[df_2026_m["StationID"] == station].copy()
+    df25_s = df_2025_m[df_2025_m["StationID"] == station].copy()
 
     df26_s["label"] = df26_s.apply(lambda r: "Cumulatief" if r["is_cumulative"] else "Dagwaarde", axis=1)
     df25_s["label"] = df25_s.apply(lambda r: "Cumulatief" if r["is_cumulative"] else "Dagwaarde", axis=1)
