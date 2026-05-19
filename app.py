@@ -136,7 +136,7 @@ df_2026_m = df_2026[df_2026["month"] == month]
 # ---------------------------------------------------------
 if mode == "Geheel Suriname (WMO‑gemiddelde)":
 
-    # Daggemiddelden per dag (alleen dagwaarden, dus rr)
+    # Daggemiddelden per dag (alleen dagwaarden)
     df26_daily = df_2026_m.groupby("day")["rr"].mean().round(1).reset_index()
     df25_daily = df_2025_m.groupby("day")["rr"].mean().round(1).reset_index()
 
@@ -158,20 +158,23 @@ if mode == "Geheel Suriname (WMO‑gemiddelde)":
     max_avg25 = df25_daily["rr"].max() if not df25_daily.empty else 0
 
     # ⭐ Max stationwaarde: alleen dagwaarden (rr), cumulatief uitgesloten
-    max_station26 = df_2026_m["rr"].max() if not df_2026_m.empty else 0
-    max_station25 = df_2025_m["rr"].max() if not df_2025_m.empty else 0
+    valid_rr_26 = df_2026_m.loc[~df_2026_m["is_cumulative"], "rr_value"]
+    valid_rr_25 = df_2025_m.loc[~df_2025_m["is_cumulative"], "rr_value"]
+
+    max_station26 = valid_rr_26.max() if not valid_rr_26.dropna().empty else 0
+    max_station25 = valid_rr_25.max() if not valid_rr_25.dropna().empty else 0
 
     with colA:
         st.subheader(f"📊 Statistieken — 2026 ({month_names[month]})")
         st.metric("Totaal (mm)", round(total26, 1))
         st.metric("Gemiddelde (mm/dag)", round(avg26, 1))
-        st.metric("Max gemiddelde dagneerslag (mm)", round(max_avg26, 1))
+        st.metric("Max dagneerslag (mm)", round(max_avg26, 1))
 
     with colB:
         st.subheader(f"📊 Statistieken — 2025 ({month_names[month]})")
         st.metric("Totaal (mm)", round(total25, 1))
         st.metric("Gemiddelde (mm/dag)", round(avg25, 1))
-        st.metric("Max gemiddelde dagneerslag (mm)", round(max_avg25, 1))
+        st.metric("Max dagneerslag (mm)", round(max_avg25, 1))
 
     col1, col2 = st.columns(2)
 
@@ -236,8 +239,11 @@ else:
     avg25 = df25_s["rr_value"].mean()
 
     # ⭐ Max: alleen dagwaarden (rr), cumulatief uitgesloten
-    max26 = df26_s["rr"].max() if not df26_s.empty else 0
-    max25 = df25_s["rr"].max() if not df25_s.empty else 0
+    valid_rr_26 = df26_s.loc[~df26_s["is_cumulative"], "rr_value"]
+    valid_rr_25 = df25_s.loc[~df25_s["is_cumulative"], "rr_value"]
+
+    max26 = valid_rr_26.max() if not valid_rr_26.dropna().empty else 0
+    max25 = valid_rr_25.max() if not valid_rr_25.dropna().empty else 0
 
     colA, colB = st.columns(2)
 
