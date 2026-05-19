@@ -7,7 +7,7 @@ from utils.seasons import assign_season
 st.set_page_config(page_title="Maandelijkse Neerslagrapportage 2025–2026", layout="wide")
 
 # ---------------------------------------------------------
-# SUPER-UNIFORMIZER — houdt ALLEEN de juiste kolommen
+# SUPER-UNIFORMIZER — verwijdert ALLES behalve RR, stationid, date
 # ---------------------------------------------------------
 def uniformize(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
@@ -63,7 +63,7 @@ def generate_analysis(total26, total25, avg26, avg25,
     if max_station26 > max_station25:
         intensity_text = (
             f"De hoogste stationwaarde in 2026 was {max_station26:.1f} mm, "
-            f"tegenover {max_station25:.1f} mm in 2025. Dit wijst op lokaal intensere buien in 2026."
+            f"tegenover {max_station25:.1f} mm in 2025."
         )
     elif max_station26 < max_station25:
         intensity_text = (
@@ -71,13 +71,9 @@ def generate_analysis(total26, total25, avg26, avg25,
             f"lager dan de {max_station25:.1f} mm in 2025."
         )
     else:
-        intensity_text = (
-            f"De hoogste stationwaarden waren gelijk ({max_station26:.1f} mm)."
-        )
+        intensity_text = f"De hoogste stationwaarden waren gelijk ({max_station26:.1f} mm)."
 
-    summary = (
-        f"{month_name} valt in de **{season}**, wat helpt om de regenpatronen te interpreteren."
-    )
+    summary = f"{month_name} valt in de **{season}**, wat helpt om de regenpatronen te interpreteren."
 
     return f"""
 ### 📘 Analyse — {month_name}
@@ -116,11 +112,8 @@ month = st.selectbox("Kies maand:", list(month_names.keys()), format_func=lambda
 # ---------------------------------------------------------
 # Data laden + uniformiseren
 # ---------------------------------------------------------
-df_2025_raw = load_rr(2025)
-df_2026_raw = load_rr(2026)
-
-df_2025 = uniformize(df_2025_raw)
-df_2026 = uniformize(df_2026_raw)
+df_2025 = uniformize(load_rr(2025))
+df_2026 = uniformize(load_rr(2026))
 
 df_2025["season"] = df_2025.apply(assign_season, axis=1)
 df_2026["season"] = df_2026.apply(assign_season, axis=1)
@@ -139,9 +132,7 @@ if mode == "Geheel Suriname (WMO‑gemiddelde)":
     stations_2026 = df_2026_m["stationid"].nunique()
     stations_2025 = df_2025_m["stationid"].nunique()
 
-    st.info(
-        f"📡 Beschikbare stations in {month_names[month]} — 2026: **{stations_2026}** | 2025: **{stations_2025}**"
-    )
+    st.info(f"📡 Beschikbare stations — 2026: **{stations_2026}** | 2025: **{stations_2025}**")
 
     colA, colB = st.columns(2)
 
@@ -171,23 +162,15 @@ if mode == "Geheel Suriname (WMO‑gemiddelde)":
     col1, col2 = st.columns(2)
 
     with col1:
-        fig1 = px.bar(
-            df26_daily,
-            x="day",
-            y="rr",
-            labels={"day": "Dag", "rr": "Neerslag (mm)"},
-            title=f"2026 — {month_names[month]}"
-        )
+        fig1 = px.bar(df26_daily, x="day", y="rr",
+                      labels={"day": "Dag", "rr": "Neerslag (mm)"},
+                      title=f"2026 — {month_names[month]}")
         st.plotly_chart(fig1, use_container_width=True)
 
     with col2:
-        fig2 = px.bar(
-            df25_daily,
-            x="day",
-            y="rr",
-            labels={"day": "Dag", "rr": "Neerslag (mm)"},
-            title=f"2025 — {month_names[month]}"
-        )
+        fig2 = px.bar(df25_daily, x="day", y="rr",
+                      labels={"day": "Dag", "rr": "Neerslag (mm)"},
+                      title=f"2025 — {month_names[month]}")
         st.plotly_chart(fig2, use_container_width=True)
 
     season_for_text = (
@@ -250,24 +233,16 @@ else:
 
     with col1:
         if not df26_s.empty:
-            fig1 = px.bar(
-                df26_s,
-                x="day",
-                y="rr",
-                labels={"day": "Dag", "rr": "Neerslag (mm)"},
-                title=f"2026 — {station}"
-            )
+            fig1 = px.bar(df26_s, x="day", y="rr",
+                          labels={"day": "Dag", "rr": "Neerslag (mm)"},
+                          title=f"2026 — {station}")
             st.plotly_chart(fig1, use_container_width=True)
 
     with col2:
         if not df25_s.empty:
-            fig2 = px.bar(
-                df25_s,
-                x="day",
-                y="rr",
-                labels={"day": "Dag", "rr": "Neerslag (mm)"},
-                title=f"2025 — {station}"
-            )
+            fig2 = px.bar(df25_s, x="day", y="rr",
+                          labels={"day": "Dag", "rr": "Neerslag (mm)"},
+                          title=f"2025 — {station}")
             st.plotly_chart(fig2, use_container_width=True)
 
     season_for_text = (
