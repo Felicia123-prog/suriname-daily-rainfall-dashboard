@@ -1,100 +1,42 @@
 import pandas as pd
-import os
-import re
-
-def clean_rain_value(x):
-    """Zet elke neerslagwaarde om naar een veilig numeriek getal."""
-    try:
-        s = str(x).strip().lower()
-    except:
-        return 0
-
-    if s in ["", "-", "—", "na", "none", "nan"]:
-        return 0
-    if "trace" in s or s == "t":
-        return 0
-
-    s = re.sub(r"[^0-9.,]", "", s)
-    s = s.replace(",", ".")
-
-    try:
-        return float(s)
-    except:
-        return 0
-
 
 def load_rr(year):
-    csv_path = f"data/rr_{year}.csv"
-    excel_path = f"data/Rainfall_Data_Suriname_{year}.xlsx"
+    if year == 2026:
+        path = r"C:\Users\Felicia\OneDrive\Desktop\Rainfall_Data_Suriname_2026.xlsx"
+    else:
+        path = r"C:\Users\Felicia\OneDrive\Desktop\Rainfall_Data_Suriname_2025.xlsx"
 
-    # Gebruik CSV als die bestaat
-    if os.path.exists(csv_path) and os.path.getsize(csv_path) > 10:
-        df = pd.read_csv(csv_path)
-        return df
+    xls = pd.ExcelFile(path)
 
-    # Anders: lees Excel
-    if not os.path.exists(excel_path):
-        raise FileNotFoundError(f"Bestand ontbreekt: {excel_path}")
-
-    xls = pd.ExcelFile(excel_path)
     frames = []
 
     for sheet in xls.sheet_names:
-        temp = pd.read_excel(excel_path, sheet_name=sheet)
+        df = pd.read_excel(path, sheet_name=sheet)
 
-        cols = [c.lower() for c in temp.columns]
+        # Harmoniseer kolomnamen
+        df.columns = [c.strip().lower() for c in df.columns]
 
-        # -------------------------
-        # 2026 STRUCTUUR
-        # -------------------------
-        if "date" in cols and "rainfall (mm)" in cols:
-            temp = temp.rename(columns={
-                "Date": "date",
-                "Rainfall (mm)": "RR",
-                "Latitude": "Latitude",
-                "Longitude": "Longitude",
-                "StationID": "StationID"
-            })
+        # Zorg dat verplichte kolommen bestaan
+        for col in ["date", "latitude", "longitude", "stationid"]:
+            if col not in df.columns:
+                df[col] = None
 
-            temp["RR"] = temp["RR"].apply(clean_rain_value)
-            frames.append(temp)
+        # Zoek neerslagkolom
+        rain_col = None
+        for c in df.columns:
+            if any(k in c for k in ["rain", "precip", "rr", "waarde", "value"]):
+                rain_col = c
+                break
+
+        if rain_col is None:
             continue
 
-        # -------------------------
-        # 2025 STRUCTUUR (CLIMSOFT)
-        # -------------------------
-        if {"year", "month", "day", "precip"}.issubset(set(cols)):
-            temp = temp.rename(columns={
-                "Year": "year",
-                "Month": "month",
-                "Day": "day",
-                "PRECIP": "RR",
-                "Lat": "Latitude",
-                "Lon": "Longitude",
-                "StationId": "StationID"
-            })
+        df = df[["date", "latitude", "longitude", "stationid", rain_col]]
+        df = df.rename(columns={rain_col: "rain_raw"})
 
-            # Datum bouwen
-            temp["date"] = pd.to_datetime(
-                temp[["year", "month", "day"]], errors="coerce"
-            )
-
-            temp["RR"] = temp["RR"].apply(clean_rain_value)
-            frames.append(temp)
-            continue
+        frames.append(df)
 
     if not frames:
-        raise ValueError(f"Geen bruikbare data gevonden in {excel_path}")
+        return pd.DataFrame()
 
-    df = pd.concat(frames, ignore_index=True)
-
-    # Datum verwerken
-    df["date"] = pd.to_datetime(df["date"], errors="coerce")
-    df = df.dropna(subset=["date"])
-
-    df["year"] = df["date"].dt.year
-    df["month"] = df["date"].dt.month
-    df["day"] = df["date"].dt.day
-
-    df.to_csv(csv_path, index=False)
-    return df
+    return pd.concat(frames, ignore_index=True)
