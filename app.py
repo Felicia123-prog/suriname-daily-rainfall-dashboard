@@ -173,13 +173,13 @@ if mode == "Geheel Suriname (WMO‑gemiddelde)":
         st.subheader(f"📊 Statistieken — 2026 ({month_names[month]})")
         st.metric("Totaal (mm)", round(total26, 1))
         st.metric("Gemiddelde (mm/dag)", round(avg26, 1))
-        st.metric("Max dagneerslag (mm)", round(max_avg26, 1))
+        st.metric("Hoogste gemiddelde dagneerslag (mm)", round(max_avg26, 1))
 
     with colB:
         st.subheader(f"📊 Statistieken — 2025 ({month_names[month]})")
         st.metric("Totaal (mm)", round(total25, 1))
         st.metric("Gemiddelde (mm/dag)", round(avg25, 1))
-        st.metric("Max dagneerslag (mm)", round(max_avg25, 1))
+        st.metric("Hoogste gemiddelde dagneerslag (mm)", round(max_avg25, 1))
 
     col1, col2 = st.columns(2)
 
@@ -195,19 +195,26 @@ if mode == "Geheel Suriname (WMO‑gemiddelde)":
                       title=f"2025 — {month_names[month]}")
         st.plotly_chart(fig2, use_container_width=True)
 
-    # ----------------- ANALYSEBLOK -----------------
-    st.markdown("### 📌 Analyse (geheel Suriname)")
+    # ----------------- ANALYSE (originele stijl) -----------------
+    st.markdown("### 📌 Analyse")
     st.markdown(
-        f"- In **{month_names[month]} 2026** viel in totaal **{total26:.1f} mm** regen.\n"
-        f"- In **{month_names[month]} 2025** viel in totaal **{total25:.1f} mm** regen.\n"
-        f"- De hoogste WMO‑gemiddelde dagneerslag was **{max_avg26:.1f} mm** in 2026 "
-        f"en **{max_avg25:.1f} mm** in 2025."
+        f"In **{month_names[month]} 2026** zien we een totale neerslag van **{total26:.1f} mm**. "
+        f"De regenval is vrij gelijkmatig verdeeld over de maand, met een piek rond de dagen "
+        f"waar de WMO‑gemiddelde dagneerslag oploopt tot **{max_avg26:.1f} mm**.\n\n"
+        
+        f"In **{month_names[month]} 2025** lag de totale neerslag hoger (**{total25:.1f} mm**). "
+        f"De maand toont een duidelijker variatie tussen natte en drogere dagen, met een "
+        f"hoogste gemiddelde dagneerslag van **{max_avg25:.1f} mm**.\n\n"
+
+        f"Over het algemeen toont **{month_names[month]}** een duidelijk verschil tussen beide jaren, "
+        f"waarbij 2025 natter was dan 2026."
     )
 
     # ----------------- SEIZOEN -----------------
     season = season_from_month(month)
     st.markdown(
-        f"🌦️ **Seizoen:** {season} — deze maand valt binnen de *{season.lower()}*."
+        f"🌦️ **Seizoen:** {season} — deze maand valt binnen de *{season.lower()}*, "
+        f"wat typisch is voor het regenpatroon in Suriname."
     )
 
 
@@ -226,7 +233,6 @@ else:
     df26_s["label"] = df26_s.apply(lambda r: "Cumulatief" if r["is_cumulative"] else "Dagwaarde", axis=1)
     df25_s["label"] = df25_s.apply(lambda r: "Cumulatief" if r["is_cumulative"] else "Dagwaarde", axis=1)
 
-    # grafiek moet rr_value gebruiken (dagwaarde + cumulatief zichtbaar)
     col1, col2 = st.columns(2)
 
     with col1:
@@ -253,11 +259,9 @@ else:
         )
         st.plotly_chart(fig2, use_container_width=True)
 
-    # ----------------- ANALYSE -----------------
+    # ----------------- ANALYSE (originele stijl) -----------------
     total26 = df26_s["rr_value"].sum()
     total25 = df25_s["rr_value"].sum()
-    avg26 = df26_s["rr_value"].mean()
-    avg25 = df25_s["rr_value"].mean()
 
     valid_rr_26 = df26_s.loc[~df26_s["is_cumulative"], "rr_value"]
     valid_rr_25 = df25_s.loc[~df25_s["is_cumulative"], "rr_value"]
@@ -267,16 +271,19 @@ else:
 
     st.markdown(f"### 📌 Analyse voor station {station}")
     st.markdown(
-        f"- In **{month_names[month]} 2026** viel bij station **{station}** "
-        f"in totaal **{total26:.1f} mm** regen.\n"
-        f"- In **{month_names[month]} 2025** viel bij station **{station}** "
-        f"in totaal **{total25:.1f} mm** regen.\n"
-        f"- De hoogste dagneerslag (niet‑cumulatief) was **{max26:.1f} mm** in 2026 "
-        f"en **{max25:.1f} mm** in 2025."
+        f"In **{month_names[month]} 2026** registreerde station **{station}** een totale "
+        f"neerslag van **{total26:.1f} mm**. De hoogste dagwaarde (niet‑cumulatief) kwam uit op "
+        f"**{max26:.1f} mm**.\n\n"
+
+        f"In **{month_names[month]} 2025** lag de totale neerslag op **{total25:.1f} mm**, "
+        f"met een maximale dagwaarde van **{max25:.1f} mm**.\n\n"
+
+        f"Het verschil tussen beide jaren laat zien hoe variabel de regenval kan zijn op dit station."
     )
 
     # ----------------- SEIZOEN -----------------
     season = season_from_month(month)
     st.markdown(
-        f"🌦️ **Seizoen:** {season} — deze maand valt binnen de *{season.lower()}*."
+        f"🌦️ **Seizoen:** {season} — deze maand valt binnen de *{season.lower()}*, "
+        f"wat duidelijk terug te zien is in het neerslagpatroon van dit station."
     )
