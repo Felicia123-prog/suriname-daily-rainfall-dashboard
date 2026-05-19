@@ -23,36 +23,35 @@ def load_rr(year: int) -> pd.DataFrame:
     xls = pd.ExcelFile(path)
     frames = []
 
-    # 2025: 1 sheet RR_2025 met PRECIP
+    # -------------------------
+    # 2025 — 1 sheet: RR_2025
+    # -------------------------
     if year == 2025:
-        if "RR_2025" not in xls.sheet_names:
-            st.error("Sheet 'RR_2025' niet gevonden in 2025‑bestand.")
-            st.stop()
-
         df = pd.read_excel(path, sheet_name="RR_2025")
-        # Verwachte kolommen: StationId, Station_Name, Lat, Lon, Year, Month, Day, PRECIP
-        df.columns = [c.strip() for c in df.columns]
 
         df = df.rename(columns={
-            "StationId": "StationID",
-            "Lat": "Latitude",
-            "Lon": "Longitude",
+            "StationId": "stationid",
+            "Station_Name": "station_name",
+            "Lat": "latitude",
+            "Lon": "longitude",
             "PRECIP": "rain_raw"
         })
 
-        # Maak een datumkolom
         df["date"] = pd.to_datetime(
             df[["Year", "Month", "Day"]].astype(int),
             errors="coerce"
         )
 
-        df = df[["date", "Latitude", "Longitude", "StationID", "rain_raw"]]
+        df = df[["date", "latitude", "longitude", "stationid", "rain_raw"]]
         frames.append(df)
 
-    # 2026: meerdere sheets met Rainfall (mm)
+    # -------------------------
+    # 2026 — meerdere sheets
+    # -------------------------
     else:
         for sheet in xls.sheet_names:
             df = pd.read_excel(path, sheet_name=sheet)
+
             df.columns = [c.strip().lower() for c in df.columns]
 
             # verplichte kolommen
@@ -142,8 +141,8 @@ if mode == "Geheel Suriname (WMO‑gemiddelde)":
     df26_daily = df_2026_m.groupby("day")["rr"].mean().round(1).reset_index()
     df25_daily = df_2025_m.groupby("day")["rr"].mean().round(1).reset_index()
 
-    stations_2026 = df_2026_m["StationID"].nunique()
-    stations_2025 = df_2025_m["StationID"].nunique()
+    stations_2026 = df_2026_m["stationid"].nunique()
+    stations_2025 = df_2025_m["stationid"].nunique()
 
     st.info(f"📡 Beschikbare stations — 2026: **{stations_2026}** | 2025: **{stations_2025}**")
 
@@ -188,12 +187,12 @@ if mode == "Geheel Suriname (WMO‑gemiddelde)":
 # ---------------------------------------------------------
 else:
     all_stations = sorted(
-        set(df_2025["StationID"].dropna()).union(df_2026["StationID"].dropna())
+        set(df_2025["stationid"].dropna()).union(df_2026["stationid"].dropna())
     )
     station = st.selectbox("Kies station:", all_stations)
 
-    df26_s = df_2026_m[df_2026_m["StationID"] == station].copy()
-    df25_s = df_2025_m[df_2025_m["StationID"] == station].copy()
+    df26_s = df_2026_m[df_2026_m["stationid"] == station].copy()
+    df25_s = df_2025_m[df_2025_m["stationid"] == station].copy()
 
     df26_s["label"] = df26_s.apply(lambda r: "Cumulatief" if r["is_cumulative"] else "Dagwaarde", axis=1)
     df25_s["label"] = df25_s.apply(lambda r: "Cumulatief" if r["is_cumulative"] else "Dagwaarde", axis=1)
