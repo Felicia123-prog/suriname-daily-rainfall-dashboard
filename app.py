@@ -7,7 +7,7 @@ from utils.seasons import assign_season
 st.set_page_config(page_title="Maandelijkse Neerslagrapportage 2025–2026", layout="wide")
 
 # ---------------------------------------------------------
-# WMO-CORRECTE SUPER-UNIFORMIZER (ULTRA ROBUST)
+# ULTRA-ROBUSTE WMO-CORRECTE UNIFORMIZER
 # ---------------------------------------------------------
 def uniformize(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
@@ -20,20 +20,18 @@ def uniformize(df: pd.DataFrame) -> pd.DataFrame:
     else:
         raw_rr = pd.Series([None] * len(df))
 
-    # 1b. ALLE spaties verwijderen (incl. unicode NBSP)
-    raw_rr = raw_rr.str.replace("\u00A0", "", regex=False)  # NBSP
-    raw_rr = raw_rr.str.replace(" ", "", regex=False)       # gewone spatie
-    raw_rr = raw_rr.str.strip()
+    # 1b. ALLE whitespace verwijderen (incl. NBSP, tabs, newlines)
+    raw_rr = raw_rr.str.replace(r"\s+", "", regex=True)
+    raw_rr = raw_rr.str.replace("\u00A0", "", regex=False)
 
-    # 2. Cumulatieve waarden detecteren (super‑robust)
-    # Match elke C of c gevolgd door een woordgrens → vangt ALLES
-    df["is_cumulative"] = raw_rr.str.contains(r"[cC]\b", regex=True)
+    # 2. Cumulatief = alles wat een C bevat (ongeacht positie)
+    df["is_cumulative"] = raw_rr.str.contains(r"[cC]", regex=True)
 
-    # 3. Numerieke waarde eruit halen (verwijder alles vanaf C)
-    df["rr_value"] = raw_rr.str.replace(r"[cC]\b.*", "", regex=True)
+    # 3. Numerieke waarde = alles vóór de eerste C
+    df["rr_value"] = raw_rr.str.replace(r"[cC].*", "", regex=True)
     df["rr_value"] = pd.to_numeric(df["rr_value"], errors="coerce")
 
-    # 4. Alleen dagwaarden voor max
+    # 4. Dagwaarde = alleen niet-cumulatief
     df["rr"] = df["rr_value"]
     df.loc[df["is_cumulative"], "rr"] = None
 
@@ -54,8 +52,6 @@ def uniformize(df: pd.DataFrame) -> pd.DataFrame:
 
     return df[["stationid", "rr", "rr_value", "is_cumulative", "date", "year", "month", "day"]]
 
-debug = df_2026_m[df_2026_m["rr_value"] == 180]
-st.write("DEBUG 180-waarden:", debug)
 
 # ---------------------------------------------------------
 # Analysefunctie
