@@ -4,12 +4,12 @@ import plotly.express as px
 from utils.load_data import load_rr
 from utils.seasons import assign_season
 
-st.set_page_config(page_title="Neerslagvergelijking 2025–2026", layout="wide")
+st.set_page_config(page_title="Maandelijkse Neerslagrapportage 2025–2026", layout="wide")
 
 # ---------------------------------------------------------
 # TITEL
 # ---------------------------------------------------------
-st.title("🌧️ Neerslagvergelijking 2025–2026 — Suriname (WMO‑Conform)")
+st.title("🌧️ Maandelijkse Neerslagrapportage voor Suriname — 2025 en 2026 (WMO‑Conform)")
 
 # ---------------------------------------------------------
 # MODE SELECTIE
@@ -44,6 +44,37 @@ df_2026_m = df_2026[df_2026["month"] == month]
 df_2025_m = df_2025[df_2025["month"] == month]
 
 # ---------------------------------------------------------
+# ANALYSE FUNCTIE
+# ---------------------------------------------------------
+def generate_analysis(total26, total25, avg26, avg25, max26, max25, season, month_name):
+
+    diff_total = total26 - total25
+    perc_total = (diff_total / total25 * 100) if total25 > 0 else 0
+
+    diff_max = max26 - max25
+
+    trend = "natter" if diff_total > 0 else "droger"
+    intensity = "intensievere buien" if diff_max > 0 else "minder intense buien"
+
+    return f"""
+### 📘 Analyse — {month_name}
+
+**Regenvalverschil:**  
+In {month_name} 2026 viel **{abs(perc_total):.1f}% {trend}** neerslag dan in {month_name} 2025  
+({total26:.1f} mm vs {total25:.1f} mm).
+
+**Intensiteit:**  
+De natste dag in 2026 bereikte **{max26:.1f} mm**, vergeleken met **{max25:.1f} mm** in 2025.  
+Dit wijst op **{intensity}** in 2026.
+
+**Seizoenscontext:**  
+{month_name} valt in de **{season}**, wat helpt om de regenpatronen te duiden.
+
+**Samenvatting:**  
+{month_name} 2026 was **{trend}** dan {month_name} 2025, met {intensity}.
+"""
+
+# ---------------------------------------------------------
 # MODE 1 — GEHEEL SURINAME (WMO GEMIDDELDE)
 # ---------------------------------------------------------
 if mode == "Geheel Suriname (WMO‑gemiddelde)":
@@ -52,9 +83,9 @@ if mode == "Geheel Suriname (WMO‑gemiddelde)":
     df26_daily = df_2026_m.groupby("day")["RR"].mean().round(1).reset_index()
     df25_daily = df_2025_m.groupby("day")["RR"].mean().round(1).reset_index()
 
-    # Aantal stations per maand (alleen stations met data)
-    stations_2026 = df_2026_m[df_2026_m["RR"].notna()]["StationID"].nunique()
-    stations_2025 = df_2025_m[df_2025_m["RR"].notna()]["StationID"].nunique()
+    # Aantal stations per maand (alleen stations met minstens 1 geldige RR)
+    stations_2026 = df_2026_m.groupby("StationID")["RR"].apply(lambda x: x.notna().any()).sum()
+    stations_2025 = df_2025_m.groupby("StationID")["RR"].apply(lambda x: x.notna().any()).sum()
 
     st.info(
         f"📡 Beschikbare stations in {month_names[month]} — 2026: **{stations_2026}** | 2025: **{stations_2025}**"
@@ -65,17 +96,24 @@ if mode == "Geheel Suriname (WMO‑gemiddelde)":
     # -----------------------------
     colA, colB = st.columns(2)
 
+    total26 = df26_daily["RR"].sum()
+    total25 = df25_daily["RR"].sum()
+    avg26 = df26_daily["RR"].mean()
+    avg25 = df25_daily["RR"].mean()
+    max26 = df26_daily["RR"].max()
+    max25 = df25_daily["RR"].max()
+
     with colA:
         st.subheader(f"📊 Statistieken — 2026 ({month_names[month]})")
-        st.metric("Totaal (mm)", round(df26_daily["RR"].sum(), 1))
-        st.metric("Gemiddelde (mm/dag)", round(df26_daily["RR"].mean(), 1))
-        st.metric("Max dagwaarde (mm)", df26_daily["RR"].max().round(1))
+        st.metric("Totaal (mm)", round(total26, 1))
+        st.metric("Gemiddelde (mm/dag)", round(avg26, 1))
+        st.metric("Max gemiddelde dagneerslag (mm)", round(max26, 1))
 
     with colB:
         st.subheader(f"📊 Statistieken — 2025 ({month_names[month]})")
-        st.metric("Totaal (mm)", round(df25_daily["RR"].sum(), 1))
-        st.metric("Gemiddelde (mm/dag)", round(df25_daily["RR"].mean(), 1))
-        st.metric("Max dagwaarde (mm)", df25_daily["RR"].max().round(1))
+        st.metric("Totaal (mm)", round(total25, 1))
+        st.metric("Gemiddelde (mm/dag)", round(avg25, 1))
+        st.metric("Max gemiddelde dagneerslag (mm)", round(max25, 1))
 
     # -----------------------------
     # GRAFIEKEN + SEIZOEN
@@ -100,6 +138,11 @@ if mode == "Geheel Suriname (WMO‑gemiddelde)":
         season_2025 = df_2025_m["season"].iloc[0]
         st.caption(f"🌱 Seizoen 2025: **{season_2025}**")
 
+    # -----------------------------
+    # ANALYSE
+    # -----------------------------
+    st.markdown(generate_analysis(total26, total25, avg26, avg25, max26, max25, season_2026, month_names[month]))
+
 # ---------------------------------------------------------
 # MODE 2 — PER STATION
 # ---------------------------------------------------------
@@ -112,6 +155,13 @@ else:
     df26_s["RR"] = df26_s["RR"].round(1)
     df25_s["RR"] = df25_s["RR"].round(1)
 
+    total26 = df26_s["RR"].sum()
+    total25 = df25_s["RR"].sum()
+    avg26 = df26_s["RR"].mean()
+    avg25 = df25_s["RR"].mean()
+    max26 = df26_s["RR"].max()
+    max25 = df25_s["RR"].max()
+
     # -----------------------------
     # STATISTIEKEN (ALLEEN 3)
     # -----------------------------
@@ -119,15 +169,15 @@ else:
 
     with colA:
         st.subheader(f"📊 Statistieken — 2026 ({station})")
-        st.metric("Totaal (mm)", round(df26_s["RR"].sum(), 1))
-        st.metric("Gemiddelde (mm/dag)", round(df26_s["RR"].mean(), 1))
-        st.metric("Max dagwaarde (mm)", df26_s["RR"].max().round(1))
+        st.metric("Totaal (mm)", round(total26, 1))
+        st.metric("Gemiddelde (mm/dag)", round(avg26, 1))
+        st.metric("Max dagneerslag (mm)", round(max26, 1))
 
     with colB:
         st.subheader(f"📊 Statistieken — 2025 ({station})")
-        st.metric("Totaal (mm)", round(df25_s["RR"].sum(), 1))
-        st.metric("Gemiddelde (mm/dag)", round(df25_s["RR"].mean(), 1))
-        st.metric("Max dagwaarde (mm)", df25_s["RR"].max().round(1))
+        st.metric("Totaal (mm)", round(total25, 1))
+        st.metric("Gemiddelde (mm/dag)", round(avg25, 1))
+        st.metric("Max dagneerslag (mm)", round(max25, 1))
 
     # -----------------------------
     # GRAFIEKEN + SEIZOEN
@@ -151,3 +201,8 @@ else:
 
         season_2025 = df25_s["season"].iloc[0]
         st.caption(f"🌱 Seizoen 2025: **{season_2025}**")
+
+    # -----------------------------
+    # ANALYSE
+    # -----------------------------
+    st.markdown(generate_analysis(total26, total25, avg26, avg25, max26, max25, season_2026, month_names[month]))
