@@ -149,6 +149,9 @@ df_2026["season"] = df_2026.apply(assign_season, axis=1)
 df_2025_m = df_2025[df_2025["Month"] == month]
 df_2026_m = df_2026[df_2026["Month"] == month]
 
+st.write("2025 columns:", df_2025_raw.columns.tolist())
+st.write("2026 columns:", df_2026_raw.columns.tolist())
+
 # ---------------------------------------------------------
 # Mode 1 — Geheel Suriname
 # ---------------------------------------------------------
