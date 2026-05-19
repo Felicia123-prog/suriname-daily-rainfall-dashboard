@@ -1,42 +1,39 @@
-import os
-st.write("📁 Current working directory:", os.getcwd())
-
-try:
-    st.write("📂 Files in working directory:", os.listdir())
-except:
-    st.write("Kan hoofdmap niet lezen")
-
-try:
-    st.write("📂 Files in ./data:", os.listdir("data"))
-except:
-    st.write("data folder not found")
-
-try:
-    st.write("📂 Files in /mount/src/suriname-daily-rainfall-dashboard:", 
-             os.listdir("/mount/src/suriname-daily-rainfall-dashboard"))
-except:
-    st.write("Map /mount/src/... bestaat niet")
-
-try:
-    st.write("📂 Files in /app/data:", os.listdir("/app/data"))
-except:
-    st.write("/app/data folder not found")
-
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import os
 
 st.set_page_config(page_title="Maandelijkse Neerslagrapportage 2025–2026", layout="wide")
+
+# ---------------------------------------------------------
+# SLIMME LOADER — VINDT ALTIJD DE DATA-MAP
+# ---------------------------------------------------------
+def resolve_path(filename):
+    possible_paths = [
+        f"data/{filename}",
+        f"./data/{filename}",
+        f"/mount/src/suriname-daily-rainfall-dashboard/data/{filename}",
+        f"/app/data/{filename}",
+        filename
+    ]
+    for p in possible_paths:
+        if os.path.exists(p):
+            return p
+    st.error(f"❌ Bestand niet gevonden: {filename}")
+    st.write("Geprobeerde paden:", possible_paths)
+    st.stop()
 
 # ---------------------------------------------------------
 # LOAD ALL SHEETS FROM EXCEL
 # ---------------------------------------------------------
 def load_rr(year):
-    if year == 2026:
-        path = r"C:\Users\Felicia\OneDrive\Desktop\Rainfall_Data_Suriname_2026.xlsx"
-    else:
-        path = r"C:\Users\Felicia\OneDrive\Desktop\Rainfall_Data_Suriname_2025.xlsx"
+    filename = (
+        "Rainfall_Data_Suriname_2026.xlsx"
+        if year == 2026
+        else "Rainfall_Data_Suriname_2025.xlsx"
+    )
 
+    path = resolve_path(filename)
     xls = pd.ExcelFile(path)
     frames = []
 
@@ -45,12 +42,10 @@ def load_rr(year):
 
         df.columns = [c.strip().lower() for c in df.columns]
 
-        # verplicht
         for col in ["date", "latitude", "longitude", "stationid"]:
             if col not in df.columns:
                 df[col] = None
 
-        # neerslagkolom zoeken
         rain_col = None
         for c in df.columns:
             if any(k in c for k in ["rain", "precip", "rr", "waarde", "value"]):
@@ -62,14 +57,11 @@ def load_rr(year):
 
         df = df[["date", "latitude", "longitude", "stationid", rain_col]]
         df = df.rename(columns={rain_col: "rain_raw"})
-
         frames.append(df)
 
-    if not frames:
-        return pd.DataFrame()
-
-    return pd.concat(frames, ignore_index=True)
-
+    if frames:
+        return pd.concat(frames, ignore_index=True)
+    return pd.DataFrame()
 
 # ---------------------------------------------------------
 # UNIFORMIZER — verwijdert ALLE cumulatieven
@@ -77,34 +69,24 @@ def load_rr(year):
 def uniformize(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
 
-    # Forceer alles naar tekst
     raw = df["rain_raw"].apply(lambda x: str(x).strip())
-
-    # Unicode normalisatie
     raw = raw.str.normalize("NFKD").str.encode("ascii", "ignore").str.decode("ascii")
-
-    # Whitespace verwijderen
     raw = raw.str.replace(r"\s+", "", regex=True)
 
-    # Detecteer cumulatief (alles met C)
     df["is_cumulative"] = raw.str.contains("C", case=False)
 
-    # Haal numerieke waarde eruit
     df["rr_value"] = raw.str.replace(r"[cC].*", "", regex=True)
     df["rr_value"] = pd.to_numeric(df["rr_value"], errors="coerce")
 
-    # Dagwaarde = niet-cumulatief
     df["rr"] = df["rr_value"]
     df.loc[df["is_cumulative"], "rr"] = None
 
-    # Datum
     df["date"] = pd.to_datetime(df["date"], errors="coerce")
     df["year"] = df["date"].dt.year
     df["month"] = df["date"].dt.month
     df["day"] = df["date"].dt.day
 
     return df
-
 
 # ---------------------------------------------------------
 # UI
@@ -134,7 +116,6 @@ df_2026 = uniformize(load_rr(2026))
 df_2025_m = df_2025[df_2025["month"] == month]
 df_2026_m = df_2026[df_2026["month"] == month]
 
-
 # ---------------------------------------------------------
 # MODE 1 — GEHEEL SURINAME
 # ---------------------------------------------------------
@@ -157,12 +138,6 @@ if mode == "Geheel Suriname (WMO‑gemiddelde)":
 
     max_avg26 = df26_daily["rr"].max() if not df26_daily.empty else 0
     max_avg25 = df25_daily["rr"].max() if not df25_daily.empty else 0
-
-    valid_rr_26 = df_2026_m.loc[~df_2026_m["is_cumulative"], "rr_value"]
-    valid_rr_25 = df_2025_m.loc[~df_2025_m["is_cumulative"], "rr_value"]
-
-    max_station26 = valid_rr_26.max() if not valid_rr_26.dropna().empty else 0
-    max_station25 = valid_rr_25.max() if not valid_rr_25.dropna().empty else 0
 
     with colA:
         st.subheader(f"📊 Statistieken — 2026 ({month_names[month]})")
@@ -189,7 +164,6 @@ if mode == "Geheel Suriname (WMO‑gemiddelde)":
                       labels={"day": "Dag", "rr": "Neerslag (mm)"},
                       title=f"2025 — {month_names[month]}")
         st.plotly_chart(fig2, use_container_width=True)
-
 
 # ---------------------------------------------------------
 # MODE 2 — PER STATION
