@@ -1,3 +1,27 @@
+import os
+st.write("📁 Current working directory:", os.getcwd())
+
+try:
+    st.write("📂 Files in working directory:", os.listdir())
+except:
+    st.write("Kan hoofdmap niet lezen")
+
+try:
+    st.write("📂 Files in ./data:", os.listdir("data"))
+except:
+    st.write("data folder not found")
+
+try:
+    st.write("📂 Files in /mount/src/suriname-daily-rainfall-dashboard:", 
+             os.listdir("/mount/src/suriname-daily-rainfall-dashboard"))
+except:
+    st.write("Map /mount/src/... bestaat niet")
+
+try:
+    st.write("📂 Files in /app/data:", os.listdir("/app/data"))
+except:
+    st.write("/app/data folder not found")
+
 import streamlit as st
 import pandas as pd
 import plotly.express as px
