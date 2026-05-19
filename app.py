@@ -7,7 +7,7 @@ from utils.seasons import assign_season
 st.set_page_config(page_title="Maandelijkse Neerslagrapportage 2025–2026", layout="wide")
 
 # ---------------------------------------------------------
-# SUPER-UNIFORMIZER (werkt voor jouw echte data)
+# SUPER-UNIFORMIZER — houdt ALLEEN de juiste kolommen
 # ---------------------------------------------------------
 def uniformize(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
@@ -15,27 +15,24 @@ def uniformize(df: pd.DataFrame) -> pd.DataFrame:
     # 1. Kolomnamen normaliseren
     df.columns = [c.strip().lower() for c in df.columns]
 
-    # 2. Unnamed kolommen verwijderen
-    df = df.loc[:, ~df.columns.str.contains("unnamed")]
+    # 2. Alleen relevante kolommen behouden
+    keep = ["stationid", "rr", "date", "year", "month", "day"]
+    df = df[[c for c in df.columns if c in keep]]
 
-    # 3. StationID normaliseren
+    # 3. StationID
     if "stationid" not in df.columns:
         df["stationid"] = None
 
-    # 4. RR normaliseren
+    # 4. RR
     if "rr" not in df.columns:
         df["rr"] = None
-
     df["rr"] = pd.to_numeric(df["rr"], errors="coerce")
 
-    # 5. Datum normaliseren
+    # 5. Datum
     if "date" in df.columns:
         df["date"] = pd.to_datetime(df["date"], errors="coerce")
     else:
-        df["date"] = pd.to_datetime(
-            df[["year", "month", "day"]],
-            errors="coerce"
-        )
+        df["date"] = pd.to_datetime(df[["year", "month", "day"]], errors="coerce")
 
     # 6. Year / Month / Day opnieuw afleiden
     df["year"] = df["date"].dt.year
@@ -71,17 +68,15 @@ def generate_analysis(total26, total25, avg26, avg25,
     elif max_station26 < max_station25:
         intensity_text = (
             f"De hoogste stationwaarde in 2026 was {max_station26:.1f} mm, "
-            f"lager dan de {max_station25:.1f} mm in 2025. De piekbuien waren dus minder intens."
+            f"lager dan de {max_station25:.1f} mm in 2025."
         )
     else:
         intensity_text = (
-            f"De hoogste stationwaarden waren gelijk ({max_station26:.1f} mm), "
-            f"wat duidt op vergelijkbare bui‑intensiteit."
+            f"De hoogste stationwaarden waren gelijk ({max_station26:.1f} mm)."
         )
 
     summary = (
-        f"Ondanks verschillen in totaal en intensiteit bleef {month_name} 2026 een maand met "
-        f"kenmerken van de {season}, inclusief lokale variatie in bui‑activiteit."
+        f"{month_name} valt in de **{season}**, wat helpt om de regenpatronen te interpreteren."
     )
 
     return f"""
@@ -95,9 +90,6 @@ De hoogste *gemiddelde* dagneerslag was {max_avg26:.1f} mm in 2026 en {max_avg25
 {intensity_text}
 
 **Seizoenscontext:**  
-{month_name} valt in de **{season}**, wat helpt om de regenpatronen te interpreteren.
-
-**Samenvatting:**  
 {summary}
 """
 
@@ -140,11 +132,12 @@ df_2026_m = df_2026[df_2026["month"] == month]
 # Mode 1 — Geheel Suriname
 # ---------------------------------------------------------
 if mode == "Geheel Suriname (WMO‑gemiddelde)":
+
     df26_daily = df_2026_m.groupby("day")["rr"].mean().round(1).reset_index()
     df25_daily = df_2025_m.groupby("day")["rr"].mean().round(1).reset_index()
 
-    stations_2026 = df_2026_m.groupby("stationid")["rr"].apply(lambda x: x.notna().any()).sum()
-    stations_2025 = df_2025_m.groupby("stationid")["rr"].apply(lambda x: x.notna().any()).sum()
+    stations_2026 = df_2026_m["stationid"].nunique()
+    stations_2025 = df_2025_m["stationid"].nunique()
 
     st.info(
         f"📡 Beschikbare stations in {month_names[month]} — 2026: **{stations_2026}** | 2025: **{stations_2025}**"
@@ -157,11 +150,11 @@ if mode == "Geheel Suriname (WMO‑gemiddelde)":
     avg26 = df26_daily["rr"].mean()
     avg25 = df25_daily["rr"].mean()
 
-    max_avg26 = df26_daily["rr"].max()
-    max_avg25 = df25_daily["rr"].max()
+    max_avg26 = df26_daily["rr"].max() if not df26_daily.empty else 0
+    max_avg25 = df25_daily["rr"].max() if not df25_daily.empty else 0
 
-    max_station26 = df_2026_m["rr"].dropna().max()
-    max_station25 = df_2025_m["rr"].dropna().max()
+    max_station26 = df_2026_m["rr"].max() if not df_2026_m.empty else 0
+    max_station25 = df_2025_m["rr"].max() if not df_2025_m.empty else 0
 
     with colA:
         st.subheader(f"📊 Statistieken — 2026 ({month_names[month]})")
@@ -183,17 +176,11 @@ if mode == "Geheel Suriname (WMO‑gemiddelde)":
                       title=f"2026 — {month_names[month]}")
         st.plotly_chart(fig1, use_container_width=True)
 
-        if not df_2026_m.empty:
-            st.caption(f"🌱 Seizoen 2026: **{df_2026_m['season'].iloc[0]}**")
-
     with col2:
         fig2 = px.bar(df25_daily, x="day", y="rr",
                       labels={"day": "Dag", "rr": "Neerslag (mm)"},
                       title=f"2025 — {month_names[month]}")
         st.plotly_chart(fig2, use_container_width=True)
-
-        if not df_2025_m.empty:
-            st.caption(f"🌱 Seizoen 2025: **{df_2025_m['season'].iloc[0]}**")
 
     season_for_text = (
         df_2026_m["season"].iloc[0]
@@ -218,7 +205,7 @@ if mode == "Geheel Suriname (WMO‑gemiddelde)":
 # Mode 2 — Per station
 # ---------------------------------------------------------
 else:
-    all_stations = sorted(set(df_2025["stationid"].unique()).union(df_2026["stationid"].unique()))
+    all_stations = sorted(set(df_2025["stationid"].dropna()).union(df_2026["stationid"].dropna()))
     station = st.selectbox("Kies station:", all_stations)
 
     df26_s = df_2026_m[df_2026_m["stationid"] == station].copy()
@@ -231,60 +218,11 @@ else:
     total25 = df25_s["rr"].sum()
     avg26 = df26_s["rr"].mean()
     avg25 = df25_s["rr"].mean()
-    max26 = df26_s["rr"].max()
-    max25 = df25_s["rr"].max()
+
+    max26 = df26_s["rr"].max() if not df26_s.empty else 0
+    max25 = df25_s["rr"].max() if not df25_s.empty else 0
 
     colA, colB = st.columns(2)
 
     with colA:
-        st.subheader(f"📊 Statistieken — 2026 ({station})")
-        st.metric("Totaal (mm)", round(total26, 1))
-        st.metric("Gemiddelde (mm/dag)", round(avg26, 1))
-        st.metric("Max dagneerslag (mm)", round(max26, 1))
-
-    with colB:
-        st.subheader(f"📊 Statistieken — 2025 ({station})")
-        st.metric("Totaal (mm)", round(total25, 1))
-        st.metric("Gemiddelde (mm/dag)", round(avg25, 1))
-        st.metric("Max dagneerslag (mm)", round(max25, 1))
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-        if not df26_s.empty:
-            fig1 = px.bar(df26_s, x="day", y="rr",
-                          labels={"day": "Dag", "rr": "Neerslag (mm)"},
-                          title=f"2026 — {station}")
-            st.plotly_chart(fig1, use_container_width=True)
-            st.caption(f"🌱 Seizoen 2026: **{df26_s['season'].iloc[0]}**")
-        else:
-            st.info("Geen data voor 2026 voor dit station in deze maand.")
-
-    with col2:
-        if not df25_s.empty:
-            fig2 = px.bar(df25_s, x="day", y="rr",
-                          labels={"day": "Dag", "rr": "Neerslag (mm)"},
-                          title=f"2025 — {station}")
-            st.plotly_chart(fig2, use_container_width=True)
-            st.caption(f"🌱 Seizoen 2025: **{df25_s['season'].iloc[0]}**")
-        else:
-            st.info("Geen data voor 2025 voor dit station in deze maand.")
-
-    season_for_text = (
-        df26_s["season"].iloc[0]
-        if not df26_s.empty
-        else df25_s["season"].iloc[0]
-        if not df25_s.empty
-        else "het betreffende seizoen"
-    )
-
-    st.markdown(
-        generate_analysis(
-            total26, total25,
-            avg26, avg25,
-            max26, max25,
-            max26, max25,
-            season_for_text,
-            month_names[month]
-        )
-    )
+        st.subheader(f"
