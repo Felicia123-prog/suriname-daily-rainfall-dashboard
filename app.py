@@ -233,8 +233,11 @@ else:
             month_names[month]
         )
     )
+cols = [c for c in ["StationID", "date", "Date", "Datum", "RR"] if c in df_2026.columns]
+
 print("RR > 100 mm — 2026")
-print(df_2026[pd.to_numeric(df_2026["RR"], errors="coerce") > 100][["StationID", "Date", "RR"]])
+print(df_2026[pd.to_numeric(df_2026["RR"], errors="coerce") > 100][cols])
 
 print("RR > 100 mm — 2025")
-print(df_2025[pd.to_numeric(df_2025["RR"], errors="coerce") > 100][["StationID", "Date", "RR"]])
+print(df_2025[pd.to_numeric(df_2025["RR"], errors="coerce") > 100][cols])
+
