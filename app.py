@@ -171,15 +171,23 @@ if mode == "Geheel Suriname (WMO‑gemiddelde)":
     col1, col2 = st.columns(2)
 
     with col1:
-        fig1 = px.bar(df26_daily, x="day", y="rr",
-                      labels={"day": "Dag", "rr": "Neerslag (mm)"},
-                      title=f"2026 — {month_names[month]}")
+        fig1 = px.bar(
+            df26_daily,
+            x="day",
+            y="rr",
+            labels={"day": "Dag", "rr": "Neerslag (mm)"},
+            title=f"2026 — {month_names[month]}"
+        )
         st.plotly_chart(fig1, use_container_width=True)
 
     with col2:
-        fig2 = px.bar(df25_daily, x="day", y="rr",
-                      labels={"day": "Dag", "rr": "Neerslag (mm)"},
-                      title=f"2025 — {month_names[month]}")
+        fig2 = px.bar(
+            df25_daily,
+            x="day",
+            y="rr",
+            labels={"day": "Dag", "rr": "Neerslag (mm)"},
+            title=f"2025 — {month_names[month]}"
+        )
         st.plotly_chart(fig2, use_container_width=True)
 
     season_for_text = (
@@ -205,7 +213,9 @@ if mode == "Geheel Suriname (WMO‑gemiddelde)":
 # Mode 2 — Per station
 # ---------------------------------------------------------
 else:
-    all_stations = sorted(set(df_2025["stationid"].dropna()).union(df_2026["stationid"].dropna()))
+    all_stations = sorted(
+        set(df_2025["stationid"].dropna()).union(df_2026["stationid"].dropna())
+    )
     station = st.selectbox("Kies station:", all_stations)
 
     df26_s = df_2026_m[df_2026_m["stationid"] == station].copy()
@@ -225,4 +235,56 @@ else:
     colA, colB = st.columns(2)
 
     with colA:
-        st.subheader(f"
+        st.subheader(f"📊 Statistieken — 2026 ({station})")
+        st.metric("Totaal (mm)", round(total26, 1))
+        st.metric("Gemiddelde (mm/dag)", round(avg26, 1))
+        st.metric("Max dagneerslag (mm)", round(max26, 1))
+
+    with colB:
+        st.subheader(f"📊 Statistieken — 2025 ({station})")
+        st.metric("Totaal (mm)", round(total25, 1))
+        st.metric("Gemiddelde (mm/dag)", round(avg25, 1))
+        st.metric("Max dagneerslag (mm)", round(max25, 1))
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        if not df26_s.empty:
+            fig1 = px.bar(
+                df26_s,
+                x="day",
+                y="rr",
+                labels={"day": "Dag", "rr": "Neerslag (mm)"},
+                title=f"2026 — {station}"
+            )
+            st.plotly_chart(fig1, use_container_width=True)
+
+    with col2:
+        if not df25_s.empty:
+            fig2 = px.bar(
+                df25_s,
+                x="day",
+                y="rr",
+                labels={"day": "Dag", "rr": "Neerslag (mm)"},
+                title=f"2025 — {station}"
+            )
+            st.plotly_chart(fig2, use_container_width=True)
+
+    season_for_text = (
+        df26_s["season"].iloc[0]
+        if not df26_s.empty
+        else df25_s["season"].iloc[0]
+        if not df25_s.empty
+        else "het betreffende seizoen"
+    )
+
+    st.markdown(
+        generate_analysis(
+            total26, total25,
+            avg26, avg25,
+            max26, max25,
+            max26, max25,
+            season_for_text,
+            month_names[month]
+        )
+    )
