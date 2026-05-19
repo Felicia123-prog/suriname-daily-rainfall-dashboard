@@ -8,38 +8,26 @@ st.set_page_config(page_title="Maandelijkse Neerslagrapportage 2025–2026", lay
 
 # ---------------------------------------------------------
 # WMO-CORRECTE SUPER-UNIFORMIZER
-# - herkent cumulatieve waarden (180C)
-# - rr_value = numerieke waarde (incl. cumulatief)
-# - rr = alleen dagwaarden (cumulatief uitgesloten)
 # ---------------------------------------------------------
 def uniformize(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
     df.columns = [c.strip().lower() for c in df.columns]
 
-   # 1. Neerslagkolom zoeken
-rain_cols = [c for c in df.columns if "rain" in c or "precip" in c or c == "rr"]
-if len(rain_cols) > 0:
-    raw_rr = df[rain_cols[0]].astype(str).str.strip()
-else:
-    raw_rr = pd.Series([None] * len(df))
+    # 1. Neerslagkolom zoeken
+    rain_cols = [c for c in df.columns if "rain" in c or "precip" in c or c == "rr"]
+    if len(rain_cols) > 0:
+        raw_rr = df[rain_cols[0]].astype(str).str.strip()
+    else:
+        raw_rr = pd.Series([None] * len(df))
 
-# 2. Cumulatieve waarden detecteren (alles met 'C' erin)
-df["is_cumulative"] = raw_rr.str.contains("c", case=False, regex=False)
+    # 2. Cumulatieve waarden detecteren (alles met 'C' erin)
+    df["is_cumulative"] = raw_rr.str.contains("c", case=False, regex=False)
 
-# 3. Numerieke waarde eruit halen
-df["rr_value"] = raw_rr.str.replace("c", "", case=False, regex=False)
-df["rr_value"] = pd.to_numeric(df["rr_value"], errors="coerce")
-
-# 4. Alleen dagwaarden voor max
-df["rr"] = df["rr_value"]
-df.loc[df["is_cumulative"], "rr"] = None
-
-
-    # 3. Numerieke waarde eruit halen (voor totalen/gemiddelden)
-    df["rr_value"] = raw_rr.str.replace("c", "", case=False).astype(str)
+    # 3. Numerieke waarde eruit halen
+    df["rr_value"] = raw_rr.str.replace("c", "", case=False, regex=False)
     df["rr_value"] = pd.to_numeric(df["rr_value"], errors="coerce")
 
-    # 4. Alleen dagwaarden voor max/grafieken
+    # 4. Alleen dagwaarden voor max
     df["rr"] = df["rr_value"]
     df.loc[df["is_cumulative"], "rr"] = None
 
@@ -145,7 +133,6 @@ df_2026_m = df_2026[df_2026["month"] == month]
 # ---------------------------------------------------------
 if mode == "Geheel Suriname (WMO‑gemiddelde)":
 
-    # Daggemiddelden per dag (alleen dagwaarden)
     df26_daily = df_2026_m.groupby("day")["rr"].mean().round(1).reset_index()
     df25_daily = df_2025_m.groupby("day")["rr"].mean().round(1).reset_index()
 
@@ -162,11 +149,11 @@ if mode == "Geheel Suriname (WMO‑gemiddelde)":
     avg26 = df_2026_m["rr_value"].mean()
     avg25 = df_2025_m["rr_value"].mean()
 
-    # ⭐ Max gemiddelde dagneerslag: op basis van daggemiddelden (rr)
+    # ⭐ Max gemiddelde dagneerslag
     max_avg26 = df26_daily["rr"].max() if not df26_daily.empty else 0
     max_avg25 = df25_daily["rr"].max() if not df25_daily.empty else 0
 
-    # ⭐ Max stationwaarde: alleen dagwaarden (rr), cumulatief uitgesloten
+    # ⭐ Max stationwaarde: alleen dagwaarden
     valid_rr_26 = df_2026_m.loc[~df_2026_m["is_cumulative"], "rr_value"]
     valid_rr_25 = df_2025_m.loc[~df_2025_m["is_cumulative"], "rr_value"]
 
@@ -188,23 +175,15 @@ if mode == "Geheel Suriname (WMO‑gemiddelde)":
     col1, col2 = st.columns(2)
 
     with col1:
-        fig1 = px.bar(
-            df26_daily,
-            x="day",
-            y="rr",
-            labels={"day": "Dag", "rr": "Neerslag (mm)"},
-            title=f"2026 — {month_names[month]}"
-        )
+        fig1 = px.bar(df26_daily, x="day", y="rr",
+                      labels={"day": "Dag", "rr": "Neerslag (mm)"},
+                      title=f"2026 — {month_names[month]}")
         st.plotly_chart(fig1, use_container_width=True)
 
     with col2:
-        fig2 = px.bar(
-            df25_daily,
-            x="day",
-            y="rr",
-            labels={"day": "Dag", "rr": "Neerslag (mm)"},
-            title=f"2025 — {month_names[month]}"
-        )
+        fig2 = px.bar(df25_daily, x="day", y="rr",
+                      labels={"day": "Dag", "rr": "Neerslag (mm)"},
+                      title=f"2025 — {month_names[month]}")
         st.plotly_chart(fig2, use_container_width=True)
 
     season_for_text = (
@@ -241,13 +220,13 @@ else:
     df26_s["rr"] = df26_s["rr"].round(1)
     df25_s["rr"] = df25_s["rr"].round(1)
 
-    # ⭐ Totalen en gemiddelden: rr_value (incl. cumulatief)
+    # ⭐ Totalen en gemiddelden: rr_value
     total26 = df26_s["rr_value"].sum()
     total25 = df25_s["rr_value"].sum()
     avg26 = df26_s["rr_value"].mean()
     avg25 = df25_s["rr_value"].mean()
 
-    # ⭐ Max: alleen dagwaarden (rr), cumulatief uitgesloten
+    # ⭐ Max: alleen dagwaarden
     valid_rr_26 = df26_s.loc[~df26_s["is_cumulative"], "rr_value"]
     valid_rr_25 = df25_s.loc[~df25_s["is_cumulative"], "rr_value"]
 
@@ -272,24 +251,16 @@ else:
 
     with col1:
         if not df26_s.empty:
-            fig1 = px.bar(
-                df26_s,
-                x="day",
-                y="rr",
-                labels={"day": "Dag", "rr": "Neerslag (mm)"},
-                title=f"2026 — {station}"
-            )
+            fig1 = px.bar(df26_s, x="day", y="rr",
+                          labels={"day": "Dag", "rr": "Neerslag (mm)"},
+                          title=f"2026 — {station}")
             st.plotly_chart(fig1, use_container_width=True)
 
     with col2:
         if not df25_s.empty:
-            fig2 = px.bar(
-                df25_s,
-                x="day",
-                y="rr",
-                labels={"day": "Dag", "rr": "Neerslag (mm)"},
-                title=f"2025 — {station}"
-            )
+            fig2 = px.bar(df25_s, x="day", y="rr",
+                          labels={"day": "Dag", "rr": "Neerslag (mm)"},
+                          title=f"2025 — {station}")
             st.plotly_chart(fig2, use_container_width=True)
 
     season_for_text = (
