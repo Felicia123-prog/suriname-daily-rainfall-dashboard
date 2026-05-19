@@ -7,7 +7,7 @@ from utils.seasons import assign_season
 st.set_page_config(page_title="Maandelijkse Neerslagrapportage 2025–2026", layout="wide")
 
 # ---------------------------------------------------------
-# ULTRA-ROBUSTE WMO-CORRECTE UNIFORMIZER
+# ULTRA-ROBUSTE UNIFORMIZER — CUMULATIEF WORDT ALTIJD UITGESLOTEN
 # ---------------------------------------------------------
 def uniformize(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
@@ -16,36 +16,40 @@ def uniformize(df: pd.DataFrame) -> pd.DataFrame:
     # 1. Neerslagkolom zoeken
     rain_cols = [c for c in df.columns if "rain" in c or "precip" in c or c == "rr"]
     if len(rain_cols) > 0:
-        raw_rr = df[rain_cols[0]].astype(str)
+        raw_rr = df[rain_cols[0]]
     else:
         raw_rr = pd.Series([None] * len(df))
 
-    # 1b. ALLE whitespace verwijderen (incl. NBSP, tabs, newlines)
+    # 2. FORCEER ALLES NAAR PURE TEKST
+    raw_rr = raw_rr.apply(lambda x: str(x).strip())
+
+    # 3. NORMALISEER ALLE UNICODE (maakt rare C’s → normale C)
+    raw_rr = raw_rr.str.normalize("NFKD").str.encode("ascii", "ignore").str.decode("ascii")
+
+    # 4. VERWIJDER ALLE WHITESPACE (incl. NBSP, tabs, newlines)
     raw_rr = raw_rr.str.replace(r"\s+", "", regex=True)
-    raw_rr = raw_rr.str.replace("\u00A0", "", regex=False)
 
-    # 2. Cumulatief = alles wat een C bevat (ongeacht positie)
-    df["is_cumulative"] = raw_rr.str.contains(r"[cC]", regex=True)
+    # 5. CUMULATIEF = ALLES MET EEN 'C' ERIN
+    df["is_cumulative"] = raw_rr.str.contains("C", case=False, regex=False)
 
-    # 3. Numerieke waarde = alles vóór de eerste C
+    # 6. NUMERIEKE WAARDE = ALLES VOOR DE EERSTE C
     df["rr_value"] = raw_rr.str.replace(r"[cC].*", "", regex=True)
     df["rr_value"] = pd.to_numeric(df["rr_value"], errors="coerce")
 
-    # 4. Dagwaarde = alleen niet-cumulatief
+    # 7. DAGWAARDE = ALLEEN NIET-CUMULATIEF
     df["rr"] = df["rr_value"]
     df.loc[df["is_cumulative"], "rr"] = None
 
-    # 5. Datum
+    # 8. Datum
     if "date" in df.columns:
         df["date"] = pd.to_datetime(df["date"], errors="coerce")
     else:
         df["date"] = pd.to_datetime(df[["year", "month", "day"]], errors="coerce")
 
-    # 6. StationID
+    # 9. StationID fallback
     if "stationid" not in df.columns:
         df["stationid"] = None
 
-    # 7. Year / Month / Day opnieuw afleiden
     df["year"] = df["date"].dt.year
     df["month"] = df["date"].dt.month
     df["day"] = df["date"].dt.day
@@ -157,7 +161,7 @@ if mode == "Geheel Suriname (WMO‑gemiddelde)":
     max_avg26 = df26_daily["rr"].max() if not df26_daily.empty else 0
     max_avg25 = df25_daily["rr"].max() if not df25_daily.empty else 0
 
-    # ⭐ Max stationwaarde: alleen dagwaarden
+    # ⭐ Max stationwaarde: alleen dagwaarden (cumulatief uitgesloten)
     valid_rr_26 = df_2026_m.loc[~df_2026_m["is_cumulative"], "rr_value"]
     valid_rr_25 = df_2025_m.loc[~df_2025_m["is_cumulative"], "rr_value"]
 
@@ -230,7 +234,7 @@ else:
     avg26 = df26_s["rr_value"].mean()
     avg25 = df25_s["rr_value"].mean()
 
-    # ⭐ Max: alleen dagwaarden
+    # ⭐ Max: alleen dagwaarden (cumulatief uitgesloten)
     valid_rr_26 = df26_s.loc[~df26_s["is_cumulative"], "rr_value"]
     valid_rr_25 = df25_s.loc[~df25_s["is_cumulative"], "rr_value"]
 
