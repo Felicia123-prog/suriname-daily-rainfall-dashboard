@@ -110,7 +110,7 @@ st.title("🌧️ Maandelijkse Neerslagrapportage voor Suriname — 2025 en 2026
 
 mode = st.radio(
     "Kies weergave:",
-    ["Geheel Suriname (WMO‑gemiddelde)", "Per station"],
+    ["Geheel Suriname (landelijk gemiddelde)", "Per station"],
     horizontal=True
 )
 
@@ -147,9 +147,9 @@ def season_from_month(m: int) -> str:
 
 
 # ---------------------------------------------------------
-# MODE 1 — GEHEEL SURINAME
+# MODE 1 — LANDELIJK GEMIDDELDE
 # ---------------------------------------------------------
-if mode == "Geheel Suriname (WMO‑gemiddelde)":
+if mode == "Geheel Suriname (landelijk gemiddelde)":
 
     df26_daily = df_2026_m.groupby("day")["rr"].mean().round(1).reset_index()
     df25_daily = df_2025_m.groupby("day")["rr"].mean().round(1).reset_index()
@@ -200,7 +200,7 @@ if mode == "Geheel Suriname (WMO‑gemiddelde)":
     st.markdown(
         f"In **{month_names[month]} 2026** zien we een totale neerslag van **{total26:.1f} mm**. "
         f"De regenval is vrij gelijkmatig verdeeld over de maand, met een piek rond de dagen "
-        f"waar de WMO‑gemiddelde dagneerslag oploopt tot **{max_avg26:.1f} mm**.\n\n"
+        f"waar de gemiddelde dagneerslag oploopt tot **{max_avg26:.1f} mm**.\n\n"
         
         f"In **{month_names[month]} 2025** lag de totale neerslag hoger (**{total25:.1f} mm**). "
         f"De maand toont een duidelijker variatie tussen natte en drogere dagen, met een "
@@ -233,6 +233,34 @@ else:
     df26_s["label"] = df26_s.apply(lambda r: "Cumulatief" if r["is_cumulative"] else "Dagwaarde", axis=1)
     df25_s["label"] = df25_s.apply(lambda r: "Cumulatief" if r["is_cumulative"] else "Dagwaarde", axis=1)
 
+    # ----------------- STATISTIEKEN -----------------
+    total26 = df26_s["rr_value"].sum()
+    total25 = df25_s["rr_value"].sum()
+
+    avg26 = df26_s["rr_value"].mean()
+    avg25 = df25_s["rr_value"].mean()
+
+    valid_rr_26 = df26_s.loc[~df26_s["is_cumulative"], "rr_value"]
+    valid_rr_25 = df25_s.loc[~df25_s["is_cumulative"], "rr_value"]
+
+    max26 = valid_rr_26.max() if not valid_rr_26.dropna().empty else 0
+    max25 = valid_rr_25.max() if not valid_rr_25.dropna().empty else 0
+
+    colA, colB = st.columns(2)
+
+    with colA:
+        st.subheader(f"📊 Statistieken — 2026 ({station})")
+        st.metric("Totaal (mm)", round(total26, 1))
+        st.metric("Gemiddelde (mm/dag)", round(avg26, 1))
+        st.metric("Hoogste dagneerslag (mm)", round(max26, 1))
+
+    with colB:
+        st.subheader(f"📊 Statistieken — 2025 ({station})")
+        st.metric("Totaal (mm)", round(total25, 1))
+        st.metric("Gemiddelde (mm/dag)", round(avg25, 1))
+        st.metric("Hoogste dagneerslag (mm)", round(max25, 1))
+
+    # ----------------- GRAFIEKEN -----------------
     col1, col2 = st.columns(2)
 
     with col1:
@@ -260,15 +288,6 @@ else:
         st.plotly_chart(fig2, use_container_width=True)
 
     # ----------------- ANALYSE (originele stijl) -----------------
-    total26 = df26_s["rr_value"].sum()
-    total25 = df25_s["rr_value"].sum()
-
-    valid_rr_26 = df26_s.loc[~df26_s["is_cumulative"], "rr_value"]
-    valid_rr_25 = df25_s.loc[~df25_s["is_cumulative"], "rr_value"]
-
-    max26 = valid_rr_26.max() if not valid_rr_26.dropna().empty else 0
-    max25 = valid_rr_25.max() if not valid_rr_25.dropna().empty else 0
-
     st.markdown(f"### 📌 Analyse voor station {station}")
     st.markdown(
         f"In **{month_names[month]} 2026** registreerde station **{station}** een totale "
