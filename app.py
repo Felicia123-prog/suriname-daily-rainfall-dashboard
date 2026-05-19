@@ -7,38 +7,53 @@ from utils.seasons import assign_season
 st.set_page_config(page_title="Maandelijkse Neerslagrapportage 2025–2026", layout="wide")
 
 # ---------------------------------------------------------
-# Uniformizers voor 2025 en 2026
+# SUPER-UNIFORMIZER (werkt voor ALLE jaren)
 # ---------------------------------------------------------
-def uniformize_2025(df: pd.DataFrame) -> pd.DataFrame:
-    # Kolommen hernoemen
-    df = df.rename(columns={
-        "StationId": "StationID",
-        "PRECIP": "RR"
-    })
+def uniformize(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
 
-    # Datumkolom maken
-    df["Date"] = pd.to_datetime(df[["Year", "Month", "Day"]], errors="coerce")
+    # -----------------------------
+    # 1. StationID detecteren
+    # -----------------------------
+    if "StationID" not in df.columns:
+        if "StationId" in df.columns:
+            df = df.rename(columns={"StationId": "StationID"})
+        else:
+            df["StationID"] = None
 
-    # RR numeriek
+    # -----------------------------
+    # 2. RR detecteren
+    # -----------------------------
+    if "RR" not in df.columns:
+        if "PRECIP" in df.columns:
+            df = df.rename(columns={"PRECIP": "RR"})
+        elif "Rainfall (mm)" in df.columns:
+            df = df.rename(columns={"Rainfall (mm)": "RR"})
+        else:
+            df["RR"] = None
+
     df["RR"] = pd.to_numeric(df["RR"], errors="coerce")
 
-    return df
+    # -----------------------------
+    # 3. Datum detecteren
+    # -----------------------------
+    has_ymd = {"Year", "Month", "Day"}.issubset(df.columns)
+    has_date = "Date" in df.columns
 
+    if has_ymd:
+        df["Date"] = pd.to_datetime(df[["Year", "Month", "Day"]], errors="coerce")
 
-def uniformize_2026(df: pd.DataFrame) -> pd.DataFrame:
-    # Kolommen hernoemen
-    df = df.rename(columns={
-        "Rainfall (mm)": "RR"
-    })
+    elif has_date:
+        df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
+        df["Year"] = df["Date"].dt.year
+        df["Month"] = df["Date"].dt.month
+        df["Day"] = df["Date"].dt.day
 
-    # RR numeriek
-    df["RR"] = pd.to_numeric(df["RR"], errors="coerce")
-
-    # Datum uit Date
-    df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
-    df["Year"] = df["Date"].dt.year
-    df["Month"] = df["Date"].dt.month
-    df["Day"] = df["Date"].dt.day
+    else:
+        df["Date"] = pd.NaT
+        df["Year"] = None
+        df["Month"] = None
+        df["Day"] = None
 
     return df
 
@@ -101,7 +116,7 @@ De hoogste *gemiddelde* dagneerslag was {max_avg26:.1f} mm in 2026 en {max_avg25
 
 
 # ---------------------------------------------------------
-# Titel en UI
+# UI
 # ---------------------------------------------------------
 st.title("🌧️ Maandelijkse Neerslagrapportage voor Suriname — 2025 en 2026")
 
@@ -125,14 +140,12 @@ month = st.selectbox("Kies maand:", list(month_names.keys()), format_func=lambda
 df_2025_raw = load_rr(2025)
 df_2026_raw = load_rr(2026)
 
-df_2025 = uniformize_2025(df_2025_raw)
-df_2026 = uniformize_2026(df_2026_raw)
+df_2025 = uniformize(df_2025_raw)
+df_2026 = uniformize(df_2026_raw)
 
-# Seizoen toevoegen
 df_2025["season"] = df_2025.apply(assign_season, axis=1)
 df_2026["season"] = df_2026.apply(assign_season, axis=1)
 
-# Filter op maand
 df_2025_m = df_2025[df_2025["Month"] == month]
 df_2026_m = df_2026[df_2026["Month"] == month]
 
@@ -178,33 +191,30 @@ if mode == "Geheel Suriname (WMO‑gemiddelde)":
     col1, col2 = st.columns(2)
 
     with col1:
-        fig1 = px.bar(
-            df26_daily, x="Day", y="RR",
-            labels={"Day": "Dag", "RR": "Neerslag (mm)"},
-            title=f"2026 — {month_names[month]}"
-        )
+        fig1 = px.bar(df26_daily, x="Day", y="RR",
+                      labels={"Day": "Dag", "RR": "Neerslag (mm)"},
+                      title=f"2026 — {month_names[month]}")
         st.plotly_chart(fig1, use_container_width=True)
+
         if not df_2026_m.empty:
-            season_2026 = df_2026_m["season"].iloc[0]
-            st.caption(f"🌱 Seizoen 2026: **{season_2026}**")
+            st.caption(f"🌱 Seizoen 2026: **{df_2026_m['season'].iloc[0]}**")
 
     with col2:
-        fig2 = px.bar(
-            df25_daily, x="Day", y="RR",
-            labels={"Day": "Dag", "RR": "Neerslag (mm)"},
-            title=f"2025 — {month_names[month]}"
-        )
+        fig2 = px.bar(df25_daily, x="Day", y="RR",
+                      labels={"Day": "Dag", "RR": "Neerslag (mm)"},
+                      title=f"2025 — {month_names[month]}")
         st.plotly_chart(fig2, use_container_width=True)
-        if not df_2025_m.empty:
-            season_2025 = df_2025_m["season"].iloc[0]
-            st.caption(f"🌱 Seizoen 2025: **{season_2025}**")
 
-    if not df_2026_m.empty:
-        season_for_text = df_2026_m["season"].iloc[0]
-    elif not df_2025_m.empty:
-        season_for_text = df_2025_m["season"].iloc[0]
-    else:
-        season_for_text = "het betreffende seizoen"
+        if not df_2025_m.empty:
+            st.caption(f"🌱 Seizoen 2025: **{df_2025_m['season'].iloc[0]}**")
+
+    season_for_text = (
+        df_2026_m["season"].iloc[0]
+        if not df_2026_m.empty
+        else df_2025_m["season"].iloc[0]
+        if not df_2025_m.empty
+        else "het betreffende seizoen"
+    )
 
     st.markdown(
         generate_analysis(
@@ -255,38 +265,31 @@ else:
 
     with col1:
         if not df26_s.empty:
-            fig1 = px.bar(
-                df26_s, x="Day", y="RR",
-                labels={"Day": "Dag", "RR": "Neerslag (mm)"},
-                title=f"2026 — {station}"
-            )
+            fig1 = px.bar(df26_s, x="Day", y="RR",
+                          labels={"Day": "Dag", "RR": "Neerslag (mm)"},
+                          title=f"2026 — {station}")
             st.plotly_chart(fig1, use_container_width=True)
-            season_2026 = df26_s["season"].iloc[0]
-            st.caption(f"🌱 Seizoen 2026: **{season_2026}**")
+            st.caption(f"🌱 Seizoen 2026: **{df26_s['season'].iloc[0]}**")
         else:
             st.info("Geen data voor 2026 voor dit station in deze maand.")
 
     with col2:
         if not df25_s.empty:
-            fig2 = px.bar(
-                df25_s, x="Day", y="RR",
-                labels={"Day": "Dag", "RR": "Neerslag (mm)"},
-                title=f"2025 — {station}"
-            )
+            fig2 = px.bar(df25_s, x="Day", y="RR",
+                          labels={"Day": "Dag", "RR": "Neerslag (mm)"},
+                          title=f"2025 — {station}")
             st.plotly_chart(fig2, use_container_width=True)
-            season_2025 = df25_s["season"].iloc[0]
-            st.caption(f"🌱 Seizoen 2025: **{season_2025}**")
+            st.caption(f"🌱 Seizoen 2025: **{df25_s['season'].iloc[0]}**")
         else:
             st.info("Geen data voor 2025 voor dit station in deze maand.")
 
-    # Analyse op stationniveau (zelfde functie, maar met stationmax als "stationwaarde")
-    season_for_text = None
-    if not df26_s.empty:
-        season_for_text = df26_s["season"].iloc[0]
-    elif not df25_s.empty:
-        season_for_text = df25_s["season"].iloc[0]
-    else:
-        season_for_text = "het betreffende seizoen"
+    season_for_text = (
+        df26_s["season"].iloc[0]
+        if not df26_s.empty
+        else df25_s["season"].iloc[0]
+        if not df25_s.empty
+        else "het betreffende seizoen"
+    )
 
     st.markdown(
         generate_analysis(
