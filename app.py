@@ -371,23 +371,22 @@ else:
 - **Dag van hoogste waarde:** 2026: dag {day_max26}, 2025: dag {day_max25}.
 """)
 
-    st.markdown("## 🧾 Conclusie")
+   st.markdown(
+    """
+    <div style="
+        background-color:#ffe5e5;
+        border-left: 6px solid #cc0000;
+        padding: 15px;
+        font-size: 18px;
+        color:#990000;
+        margin-top: 25px;
+        border-radius: 6px;
+    ">
+    <b>⚠️ Belangrijke opmerking:</b><br>
+    Sommige stations hebben ontbrekende of onvolledige data. Hierdoor kan het lijken alsof er minder regen is gevallen, 
+    terwijl dit het gevolg is van datagebrek en niet van werkelijke neerslaghoeveelheden.
+    </div>
+    """,
+    unsafe_allow_html=True
+)
 
-    if wetter_year == "2026":
-        conclusie = (
-            f"{month_names[month]} van 2026 was natter dan 2025 op station {station}, "
-            f"met hogere totalen en intensievere dagpieken."
-        )
-    else:
-        conclusie = (
-            f"{month_names[month]} van 2025 was natter dan 2026 op station {station}, "
-            f"met hogere totalen en duidelijkere variatie tussen natte en drogere dagen."
-        )
-
-    st.markdown(f"**{conclusie}**")
-
-    st.info(
-        "ℹ️ **Let op:** Sommige stations hebben ontbrekende of onvolledige data. "
-        "Hierdoor kan het lijken alsof er minder regen is gevallen, terwijl dit het gevolg is "
-        "van datagebrek en niet van werkelijke neerslaghoeveelheden."
-    )
