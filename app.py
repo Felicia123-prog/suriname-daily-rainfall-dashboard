@@ -23,9 +23,6 @@ def load_rr(year: int) -> pd.DataFrame:
     xls = pd.ExcelFile(path)
     frames = []
 
-    # -------------------------
-    # 2025 — 1 sheet RR_2025
-    # -------------------------
     if year == 2025:
         df = pd.read_excel(path, sheet_name="RR_2025")
 
@@ -45,9 +42,6 @@ def load_rr(year: int) -> pd.DataFrame:
         df = df[["date", "latitude", "longitude", "stationid", "rain_raw"]]
         frames.append(df)
 
-    # -------------------------
-    # 2026 — meerdere sheets
-    # -------------------------
     else:
         for sheet in xls.sheet_names:
             df = pd.read_excel(path, sheet_name=sheet)
@@ -77,7 +71,7 @@ def load_rr(year: int) -> pd.DataFrame:
 
 
 # ---------------------------------------------------------
-# UNIFORMIZER — cumulatieven eruit voor statistiek
+# UNIFORMIZER
 # ---------------------------------------------------------
 def uniformize(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
@@ -91,7 +85,6 @@ def uniformize(df: pd.DataFrame) -> pd.DataFrame:
     df["rr_value"] = raw.str.replace(r"[cC].*", "", regex=True)
     df["rr_value"] = pd.to_numeric(df["rr_value"], errors="coerce")
 
-    # rr = dagwaarde (zonder cumulatief)
     df["rr"] = df["rr_value"]
     df.loc[df["is_cumulative"], "rr"] = None
 
@@ -123,7 +116,7 @@ month_names = {
 month = st.selectbox("Kies maand:", list(month_names.keys()), format_func=lambda x: month_names[x])
 
 # ---------------------------------------------------------
-# DATA LADEN + OPSCHONEN
+# DATA LADEN
 # ---------------------------------------------------------
 df_2025 = uniformize(load_rr(2025))
 df_2026 = uniformize(load_rr(2026))
@@ -131,8 +124,9 @@ df_2026 = uniformize(load_rr(2026))
 df_2025_m = df_2025[df_2025["month"] == month]
 df_2026_m = df_2026[df_2026["month"] == month]
 
+
 # ---------------------------------------------------------
-# HELPER: seizoensnaam
+# HELPER: seizoen
 # ---------------------------------------------------------
 def season_from_month(m: int) -> str:
     if m in [12, 1, 2]:
@@ -195,20 +189,15 @@ if mode == "Geheel Suriname (landelijk gemiddelde)":
                       title=f"2025 — {month_names[month]}")
         st.plotly_chart(fig2, use_container_width=True)
 
-    # ----------------- ANALYSE (originele stijl + dynamisch natter jaar) -----------------
+    # ----------------- VERGELIJKING -----------------
+    wetter_year = "2026" if total26 > total25 else "2025"
 
-    # Bepalen welk jaar natter was
-    if total26 > total25:
-        wetter_year = "2026"
-    else:
-        wetter_year = "2025"
-
-    st.markdown("### 📌 Analyse")
+    st.markdown("## 📌 Vergelijking")
     st.markdown(
         f"In **{month_names[month]} 2026** zien we een totale neerslag van **{total26:.1f} mm**. "
         f"De regenval is vrij gelijkmatig verdeeld over de maand, met een piek rond de dagen "
         f"waar de gemiddelde dagneerslag oploopt tot **{max_avg26:.1f} mm**.\n\n"
-        
+
         f"In **{month_names[month]} 2025** lag de totale neerslag op **{total25:.1f} mm**. "
         f"De maand toont een duidelijker variatie tussen natte en drogere dagen, met een "
         f"hoogste gemiddelde dagneerslag van **{max_avg25:.1f} mm**.\n\n"
@@ -223,6 +212,42 @@ if mode == "Geheel Suriname (landelijk gemiddelde)":
         f"🌦️ **Seizoen:** {season} — deze maand valt binnen de *{season.lower()}*, "
         f"wat typisch is voor het regenpatroon in Suriname."
     )
+
+    # ----------------- CONTRAST -----------------
+    st.markdown("## ⚖️ Contrast (Verschillen)")
+
+    verschil_totaal = total26 - total25
+    verschil_gem = avg26 - avg25
+    verschil_max = max_avg26 - max_avg25
+
+    st.markdown(f"""
+    **Belangrijkste verschillen:**
+
+    - **Totaal neerslag:** {verschil_totaal:+.1f} mm  
+    - **Gemiddelde per dag:** {verschil_gem:+.1f} mm/dag  
+    - **Hoogste dagwaarde:** {verschil_max:+.1f} mm  
+    - **Natter jaar:** {wetter_year}  
+    """)
+
+    # ----------------- CONCLUSIE -----------------
+    st.markdown("## 🧾 Conclusie")
+
+    if verschil_totaal > 0:
+        conclusie = (
+            f"{month_names[month]} van 2026 was duidelijk natter dan 2025, "
+            f"met hogere totalen en intensievere regendagen."
+        )
+    elif verschil_totaal < 0:
+        conclusie = (
+            f"{month_names[month]} van 2025 was natter dan 2026, "
+            f"met hogere totalen en meer uitgesproken pieken."
+        )
+    else:
+        conclusie = (
+            f"Beide jaren vertoonden vrijwel dezelfde hoeveelheid neerslag in {month_names[month]}."
+        )
+
+    st.markdown(f"**{conclusie}**")
 
 
 # ---------------------------------------------------------
@@ -240,7 +265,6 @@ else:
     df26_s["label"] = df26_s.apply(lambda r: "Cumulatief" if r["is_cumulative"] else "Dagwaarde", axis=1)
     df25_s["label"] = df25_s.apply(lambda r: "Cumulatief" if r["is_cumulative"] else "Dagwaarde", axis=1)
 
-    # ----------------- STATISTIEKEN -----------------
     total26 = df26_s["rr_value"].sum()
     total25 = df25_s["rr_value"].sum()
 
@@ -253,7 +277,6 @@ else:
     max26 = valid_rr_26.max() if not valid_rr_26.dropna().empty else 0
     max25 = valid_rr_25.max() if not valid_rr_25.dropna().empty else 0
 
-    # ⭐ DAG VAN MAX TOEVOEGEN
     day_max26 = df26_s.loc[df26_s["rr_value"] == max26, "day"].iloc[0] if max26 > 0 else "-"
     day_max25 = df25_s.loc[df25_s["rr_value"] == max25, "day"].iloc[0] if max25 > 0 else "-"
 
@@ -271,7 +294,6 @@ else:
         st.metric("Gemiddelde (mm/dag)", round(avg25, 1))
         st.metric("Hoogste dagneerslag (mm)", f"{max25:.1f} (dag {day_max25})")
 
-    # ----------------- GRAFIEKEN -----------------
     col1, col2 = st.columns(2)
 
     with col1:
@@ -298,17 +320,17 @@ else:
         )
         st.plotly_chart(fig2, use_container_width=True)
 
-    # ----------------- ANALYSE (met dag van max) -----------------
-    st.markdown(f"### 📌 Analyse voor station {station}")
+    # ----------------- VERGELIJKING -----------------
+    st.markdown("## 📌 Vergelijking")
     st.markdown(
         f"In **{month_names[month]} 2026** registreerde station **{station}** een totale "
-        f"neerslag van **{total26:.1f} mm**. De hoogste dagwaarde (niet‑cumulatief) was "
-        f"**{max26:.1f} mm**, gemeten op **dag {day_max26}**.\n\n"
+        f"neerslag van **{total26:.1f} mm**, met een hoogste dagwaarde van "
+        f"**{max26:.1f} mm** op **dag {day_max26}**.\n\n"
 
         f"In **{month_names[month]} 2025** lag de totale neerslag op **{total25:.1f} mm**, "
-        f"met een maximale dagwaarde van **{max25:.1f} mm**, gemeten op **dag {day_max25}**.\n\n"
+        f"met een maximale dagwaarde van **{max25:.1f} mm** op **dag {day_max25}**.\n\n"
 
-        f"Het verschil tussen beide jaren laat zien hoe variabel de regenval kan zijn op dit station."
+        f"Het verschil toont duidelijk hoe variabel de regenval kan zijn op dit station."
     )
 
     # ----------------- SEIZOEN -----------------
@@ -317,3 +339,39 @@ else:
         f"🌦️ **Seizoen:** {season} — deze maand valt binnen de *{season.lower()}*, "
         f"wat duidelijk terug te zien is in het neerslagpatroon van dit station."
     )
+
+    # ----------------- CONTRAST -----------------
+    st.markdown("## ⚖️ Contrast (Verschillen)")
+
+    verschil_totaal = total26 - total25
+    verschil_gem = avg26 - avg25
+    verschil_max = max26 - max25
+
+    st.markdown(f"""
+    **Belangrijkste verschillen:**
+
+    - **Totaal neerslag:** {verschil_totaal:+.1f} mm  
+    - **Gemiddelde per dag:** {verschil_gem:+.1f} mm/dag  
+    - **Hoogste dagwaarde:** {verschil_max:+.1f} mm  
+    - **Dag van hoogste waarde:** 2026: dag {day_max26}, 2025: dag {day_max25}  
+    """)
+
+    # ----------------- CONCLUSIE -----------------
+    st.markdown("## 🧾 Conclusie")
+
+    if verschil_totaal > 0:
+        conclusie = (
+            f"{month_names[month]} van 2026 was natter dan 2025 op station {station}, "
+            f"met hogere totalen en intensievere pieken."
+        )
+    elif verschil_totaal < 0:
+        conclusie = (
+            f"{month_names[month]} van 2025 was natter dan 2026 op station {station}, "
+            f"met duidelijk hogere dagwaarden."
+        )
+    else:
+        conclusie = (
+            f"Beide jaren vertoonden vrijwel dezelfde hoeveelheid neerslag op station {station}."
+        )
+
+    st.markdown(f"**{conclusie}**")
