@@ -370,8 +370,7 @@ else:
 - **Hoogste dagwaarde:** verschil van **{verschil_max:.1f} mm**.
 - **Dag van hoogste waarde:** 2026: dag {day_max26}, 2025: dag {day_max25}.
 """)
-
-   st.markdown(
+st.markdown(
     """
     <div style="
         background-color:#ffe5e5;
@@ -382,11 +381,12 @@ else:
         margin-top: 25px;
         border-radius: 6px;
     ">
-    <b>⚠️ Belangrijke opmerking:</b><br>
-    Sommige stations hebben ontbrekende of onvolledige data. Hierdoor kan het lijken alsof er minder regen is gevallen, 
-    terwijl dit het gevolg is van datagebrek en niet van werkelijke neerslaghoeveelheden.
+        <b>⚠️ Belangrijke opmerking:</b><br>
+        Sommige stations hebben ontbrekende of onvolledige data. Hierdoor kan het lijken alsof er minder regen is gevallen,
+        terwijl dit het gevolg is van datagebrek en niet van werkelijke neerslaghoeveelheden.
     </div>
     """,
     unsafe_allow_html=True
 )
+
 
