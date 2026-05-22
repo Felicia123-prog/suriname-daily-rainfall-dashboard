@@ -246,11 +246,7 @@ if mode == "Geheel Suriname (landelijk gemiddelde)":
         )
 
     st.markdown(f"**{conclusie}**")
-
-    st.info(
-        "ℹ️ **Let op:** Het kan voorkomen dat sommige stations ontbrekende of onvolledige data hebben. "
-        "Hierdoor kan het lijken alsof er minder regen is gevallen, terwijl dit het gevolg is van "
-        "datagebrek en niet van werkelijke neerslaghoeveelheden."
+    
     )
 
 # ---------------------------------------------------------
