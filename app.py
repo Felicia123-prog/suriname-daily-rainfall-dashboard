@@ -16,14 +16,18 @@ def season_from_month(m: int) -> str:
     if m in [5, 6, 7]:
         return "Grote regentijd"
     if m in [8, 9, 10, 11]:
-        return "Grote droge tijd"
+        return "Grote regentijd"
     return ""
 
 # ---------------------------------------------------------
 # DATA LADEN
 # ---------------------------------------------------------
 def load_rr(year: int) -> pd.DataFrame:
-    filename = f"Rainfall_Data_Suriname_{year}.xlsx"
+    if year == 2026:
+        filename = "Rainfall_Data_Suriname_2026.xlsx"
+    else:
+        filename = "Rainfall_Data_Suriname_2025.xlsx"
+
     path = os.path.join("data", filename)
 
     if not os.path.exists(path):
@@ -35,6 +39,7 @@ def load_rr(year: int) -> pd.DataFrame:
 
     if year == 2025:
         df = pd.read_excel(path, sheet_name="RR_2025")
+
         df = df.rename(columns={
             "StationId": "stationid",
             "Station_Name": "station_name",
@@ -42,8 +47,13 @@ def load_rr(year: int) -> pd.DataFrame:
             "Lon": "longitude",
             "PRECIP": "rain_raw"
         })
-        df["date"] = pd.to_datetime(df[["Year", "Month", "Day"]].astype(int), errors="coerce")
-        df = df[["date", "latitude", "longitude", "stationid, "rain_raw"]]
+
+        df["date"] = pd.to_datetime(
+            df[["Year", "Month", "Day"]].astype(int),
+            errors="coerce"
+        )
+
+        df = df[["date", "latitude", "longitude", "stationid", "rain_raw"]]
         frames.append(df)
 
     else:
@@ -55,7 +65,12 @@ def load_rr(year: int) -> pd.DataFrame:
                 if col not in df.columns:
                     df[col] = None
 
-            rain_col = next((c for c in df.columns if "rain" in c or "precip" in c or c == "rr"), None)
+            rain_col = None
+            for c in df.columns:
+                if "rainfall" in c or "precip" in c or c == "rr":
+                    rain_col = c
+                    break
+
             if rain_col is None:
                 continue
 
@@ -63,19 +78,26 @@ def load_rr(year: int) -> pd.DataFrame:
             df = df.rename(columns={rain_col: "rain_raw"})
             frames.append(df)
 
-    return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+    if not frames:
+        return pd.DataFrame()
+
+    return pd.concat(frames, ignore_index=True)
 
 # ---------------------------------------------------------
 # UNIFORMIZER
 # ---------------------------------------------------------
 def uniformize(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
-    raw = df["rain_raw"].astype(str).str.strip()
+
+    raw = df["rain_raw"].apply(lambda x: str(x).strip())
     raw = raw.str.normalize("NFKD").str.encode("ascii", "ignore").str.decode("ascii")
     raw = raw.str.replace(r"\s+", "", regex=True)
 
     df["is_cumulative"] = raw.str.contains("C", case=False)
-    df["rr_value"] = pd.to_numeric(raw.str.replace(r"[cC].*", "", regex=True), errors="coerce")
+
+    df["rr_value"] = raw.str.replace(r"[cC].*", "", regex=True)
+    df["rr_value"] = pd.to_numeric(df["rr_value"], errors="coerce")
+
     df["rr"] = df["rr_value"]
     df.loc[df["is_cumulative"], "rr"] = None
 
@@ -119,16 +141,19 @@ df_2026_m = df_2026[df_2026["month"] == month]
 # ---------------------------------------------------------
 if mode == "Geheel Suriname (landelijk gemiddelde)":
 
-    if df_2025_m.empty and df_2026_m.empty:
-        st.warning("Geen landelijke gegevens beschikbaar voor beide jaren.")
+    has_2025 = not df_2025_m.empty
+    has_2026 = not df_2026_m.empty
+
+    if not has_2025 and not has_2026:
+        st.warning("Voor deze maand ontbreken landelijke gegevens voor zowel 2025 als 2026. Een vergelijking is niet mogelijk.")
         st.stop()
 
-    if df_2025_m.empty:
-        st.warning("Geen landelijke gegevens voor 2025.")
+    if not has_2025:
+        st.warning("Voor deze maand ontbreken landelijke gegevens voor 2025. Een vergelijking met 2026 is niet mogelijk.")
         st.stop()
 
-    if df_2026_m.empty:
-        st.warning("Geen landelijke gegevens voor 2026.")
+    if not has_2026:
+        st.warning("Voor deze maand ontbreken landelijke gegevens voor 2026. Een vergelijking met 2025 is niet mogelijk.")
         st.stop()
 
     df26_daily = df_2026_m.groupby("day")["rr"].mean().round(1).reset_index()
@@ -146,54 +171,82 @@ if mode == "Geheel Suriname (landelijk gemiddelde)":
     avg26 = df_2026_m["rr_value"].mean()
     avg25 = df_2025_m["rr_value"].mean()
 
-    max_avg26 = df26_daily["rr"].max()
-    max_avg25 = df25_daily["rr"].max()
+    max_avg26 = df26_daily["rr"].max() if not df26_daily.empty else 0
+    max_avg25 = df25_daily["rr"].max() if not df25_daily.empty else 0
 
     with colA:
         st.subheader(f"📊 Statistieken — 2026 ({month_names[month]})")
         st.metric("Totaal (mm)", round(total26, 1))
         st.metric("Gemiddelde (mm/dag)", round(avg26, 1))
-        st.metric("Hoogste dagwaarde (mm)", round(max_avg26, 1))
+        st.metric("Hoogste gemiddelde dagneerslag (mm)", round(max_avg26, 1))
 
     with colB:
         st.subheader(f"📊 Statistieken — 2025 ({month_names[month]})")
         st.metric("Totaal (mm)", round(total25, 1))
         st.metric("Gemiddelde (mm/dag)", round(avg25, 1))
-        st.metric("Hoogste dagwaarde (mm)", round(max_avg25, 1))
+        st.metric("Hoogste gemiddelde dagneerslag (mm)", round(max_avg25, 1))
 
     col1, col2 = st.columns(2)
 
     with col1:
-        st.plotly_chart(px.bar(df26_daily, x="day", y="rr", title=f"2026 — {month_names[month]}"), use_container_width=True)
+        fig1 = px.bar(df26_daily, x="day", y="rr",
+                      labels={"day": "Dag", "rr": "Neerslag (mm)"},
+                      title=f"2026 — {month_names[month]}")
+        st.plotly_chart(fig1, use_container_width=True)
 
     with col2:
-        st.plotly_chart(px.bar(df25_daily, x="day", y="rr", title=f"2025 — {month_names[month]}"), use_container_width=True)
+        fig2 = px.bar(df25_daily, x="day", y="rr",
+                      labels={"day": "Dag", "rr": "Neerslag (mm)"},
+                      title=f"2025 — {month_names[month]}")
+        st.plotly_chart(fig2, use_container_width=True)
 
     wetter_year = "2026" if total26 > total25 else "2025"
 
     st.markdown("## 📌 Vergelijking")
     st.markdown(
-        f"In **{month_names[month]} 2026** viel **{total26:.1f} mm** regen, "
-        f"met een hoogste dagwaarde van **{max_avg26:.1f} mm**.\n\n"
-        f"In **{month_names[month]} 2025** viel **{total25:.1f} mm**, "
-        f"met een hoogste dagwaarde van **{max_avg25:.1f} mm**.\n\n"
-        f"➡️ **{wetter_year}** was het nattere jaar."
+        f"In **{month_names[month]} 2026** viel landelijk in totaal **{total26:.1f} mm** regen. "
+        f"De regenval was redelijk gelijkmatig verdeeld, met een hoogste gemiddelde dagwaarde van **{max_avg26:.1f} mm**.\n\n"
+        f"In **{month_names[month]} 2025** bedroeg de totale neerslag **{total25:.1f} mm**, "
+        f"met een duidelijkere afwisseling tussen natte en drogere dagen. "
+        f"De hoogste gemiddelde dagwaarde lag op **{max_avg25:.1f} mm**.\n\n"
+        f"Op basis hiervan was **{wetter_year}** het nattere jaar."
     )
 
     season = season_from_month(month)
-    st.markdown(f"🌦️ **Seizoen:** {season}")
+    st.markdown(
+        f"🌦️ **Seizoen:** {season} — deze maand valt binnen de *{season.lower()}*, "
+        f"wat past binnen het typische regenpatroon van Suriname."
+    )
 
-    st.markdown("## ⚖️ Verschillen")
+    st.markdown("## ⚖️ Verschillen tussen de jaren")
+
+    verschil_totaal = abs(total26 - total25)
+    verschil_gem = abs(avg26 - avg25)
+    verschil_max = abs(max_avg26 - max_avg25)
+
     st.markdown(f"""
-- **Totale neerslag:** verschil **{abs(total26-total25):.1f} mm**
-- **Gemiddelde dagneerslag:** verschil **{abs(avg26-avg25):.1f} mm/dag**
-- **Hoogste dagwaarde:** verschil **{abs(max_avg26-max_avg25):.1f} mm**
+**Belangrijkste verschillen:**
+
+- **Totale neerslag:** {wetter_year} had **{verschil_totaal:.1f} mm** meer neerslag.
+- **Gemiddelde dagneerslag:** verschil van **{verschil_gem:.1f} mm/dag**.
+- **Hoogste dagwaarde:** verschil van **{verschil_max:.1f} mm**.
 """)
 
     st.markdown("## 🧾 Conclusie")
-    st.markdown(f"**{wetter_year}** was natter in {month_names[month]}.")
 
-    # Rode disclaimer
+    if wetter_year == "2026":
+        conclusie = (
+            f"{month_names[month]} van 2026 was natter dan 2025, "
+            f"met hogere totalen en intensievere dagpieken."
+        )
+    else:
+        conclusie = (
+            f"{month_names[month]} van 2025 was natter dan 2026, "
+            f"met hogere totalen en duidelijkere variatie tussen natte en drogere dagen."
+        )
+
+    st.markdown(f"**{conclusie}**")
+
     st.markdown(
         """
         <div style="
@@ -217,27 +270,31 @@ if mode == "Geheel Suriname (landelijk gemiddelde)":
 # MODE 2 — PER STATION
 # ---------------------------------------------------------
 else:
-
-    all_stations = sorted(set(df_2025["stationid"].dropna()).union(df_2026["stationid"].dropna()))
+    all_stations = sorted(
+        set(df_2025["stationid"].dropna()).union(df_2026["stationid"].dropna())
+    )
     station = st.selectbox("Kies station:", all_stations)
 
-    df26_s = df_2026_m[df_2026_m["stationid"] == station]
-    df25_s = df_2025_m[df_2025_m["stationid"] == station]
+    df26_s = df_2026_m[df_2026_m["stationid"] == station].copy()
+    df25_s = df_2025_m[df_2025_m["stationid"] == station].copy()
 
-    if df25_s.empty and df26_s.empty:
-        st.warning(f"Geen gegevens voor station {station}.")
+    has_2025 = not df25_s.empty
+    has_2026 = not df26_s.empty
+
+    if not has_2025 and not has_2026:
+        st.warning(f"Voor station **{station}** ontbreken gegevens voor zowel 2025 als 2026. Een vergelijking is niet mogelijk.")
         st.stop()
 
-    if df25_s.empty:
-        st.warning(f"Geen gegevens voor 2025 voor station {station}.")
+    if not has_2025:
+        st.warning(f"Voor station **{station}** ontbreken gegevens voor 2025. Een vergelijking met 2026 is niet mogelijk.")
         st.stop()
 
-    if df26_s.empty:
-        st.warning(f"Geen gegevens voor 2026 voor station {station}.")
+    if not has_2026:
+        st.warning(f"Voor station **{station}** ontbreken gegevens voor 2026. Een vergelijking met 2025 is niet mogelijk.")
         st.stop()
 
-    df26_s["label"] = df26_s["is_cumulative"].map({True: "Cumulatief", False: "Dagwaarde"})
-    df25_s["label"] = df25_s["is_cumulative"].map({True: "Cumulatief", False: "Dagwaarde"})
+    df26_s["label"] = df26_s.apply(lambda r: "Cumulatief" if r["is_cumulative"] else "Dagwaarde", axis=1)
+    df25_s["label"] = df25_s.apply(lambda r: "Cumulatief" if r["is_cumulative"] else "Dagwaarde", axis=1)
 
     total26 = df26_s["rr_value"].sum()
     total25 = df25_s["rr_value"].sum()
@@ -245,11 +302,14 @@ else:
     avg26 = df26_s["rr_value"].mean()
     avg25 = df25_s["rr_value"].mean()
 
-    max26 = df26_s.loc[~df26_s["is_cumulative"], "rr_value"].max()
-    max25 = df25_s.loc[~df25_s["is_cumulative"], "rr_value"].max()
+    valid_rr_26 = df26_s.loc[~df26_s["is_cumulative"], "rr_value"]
+    valid_rr_25 = df25_s.loc[~df25_s["is_cumulative"], "rr_value"]
 
-    day_max26 = df26_s.loc[df26_s["rr_value"] == max26, "day"].iloc[0] if pd.notna(max26) else "-"
-    day_max25 = df25_s.loc[df25_s["rr_value"] == max25, "day"].iloc[0] if pd.notna(max25) else "-"
+    max26 = valid_rr_26.max() if not valid_rr_26.dropna().empty else 0
+    max25 = valid_rr_25.max() if not valid_rr_25.dropna().empty else 0
+
+    day_max26 = df26_s.loc[df26_s["rr_value"] == max26, "day"].iloc[0] if max26 > 0 else "-"
+    day_max25 = df25_s.loc[df25_s["rr_value"] == max25, "day"].iloc[0] if max25 > 0 else "-"
 
     colA, colB = st.columns(2)
 
@@ -257,45 +317,88 @@ else:
         st.subheader(f"📊 Statistieken — 2026 ({station})")
         st.metric("Totaal (mm)", round(total26, 1))
         st.metric("Gemiddelde (mm/dag)", round(avg26, 1))
-        st.metric("Hoogste dagwaarde", f"{max26:.1f} mm (dag {day_max26})")
+        st.metric("Hoogste dagneerslag (mm)", f"{max26:.1f} (dag {day_max26})")
 
     with colB:
         st.subheader(f"📊 Statistieken — 2025 ({station})")
         st.metric("Totaal (mm)", round(total25, 1))
         st.metric("Gemiddelde (mm/dag)", round(avg25, 1))
-        st.metric("Hoogste dagwaarde", f"{max25:.1f} mm (dag {day_max25})")
+        st.metric("Hoogste dagneerslag (mm)", f"{max25:.1f} (dag {day_max25})")
 
     col1, col2 = st.columns(2)
 
     with col1:
-        st.plotly_chart(px.bar(df26_s, x="day", y="rr_value", color="label", title=f"2026 — {station}"), use_container_width=True)
+        fig1 = px.bar(
+            df26_s,
+            x="day",
+            y="rr_value",
+            color="label",
+            color_discrete_map={"Dagwaarde": "blue", "Cumulatief": "red"},
+            labels={"day": "Dag", "rr_value": "Neerslag (mm)", "label": "Type"},
+            title=f"2026 — {station}"
+        )
+        st.plotly_chart(fig1, use_container_width=True)
 
     with col2:
-        st.plotly_chart(px.bar(df25_s, x="day", y="rr_value", color="label", title=f"2025 — {station}"), use_container_width=True)
+        fig2 = px.bar(
+            df25_s,
+            x="day",
+            y="rr_value",
+            color="label",
+            color_discrete_map={"Dagwaarde": "blue", "Cumulatief": "red"},
+            labels={"day": "Dag", "rr_value": "Neerslag (mm)", "label": "Type"},
+            title=f"2025 — {station}"
+        )
+        st.plotly_chart(fig2, use_container_width=True)
 
     wetter_year = "2026" if total26 > total25 else "2025"
 
     st.markdown("## 📌 Vergelijking")
     st.markdown(
-        f"In **{month_names[month]} 2026** viel **{total26:.1f} mm**, hoogste dagwaarde **{max26:.1f} mm**.\n\n"
-        f"In **{month_names[month]} 2025** viel **{total25:.1f} mm**, hoogste dagwaarde **{max25:.1f} mm**.\n\n"
-        f"➡️ **{wetter_year}** was natter."
+        f"In **{month_names[month]} 2026** registreerde station **{station}** een totale "
+        f"neerslag van **{total26:.1f} mm**, met een hoogste dagwaarde van "
+        f"**{max26:.1f} mm** op **dag {day_max26}**.\n\n"
+        f"In **{month_names[month]} 2025** bedroeg de totale neerslag **{total25:.1f} mm**, "
+        f"met een maximale dagwaarde van **{max25:.1f} mm** op **dag {day_max25}**.\n\n"
+        f"Op basis van deze gegevens was **{wetter_year}** het nattere jaar."
     )
 
     season = season_from_month(month)
-    st.markdown(f"🌦️ **Seizoen:** {season}")
+    st.markdown(
+        f"🌦️ **Seizoen:** {season} — deze maand valt binnen de *{season.lower()}*, "
+        f"wat duidelijk zichtbaar is in het neerslagpatroon van dit station."
+    )
 
-    st.markdown("## ⚖️ Verschillen")
+    st.markdown("## ⚖️ Verschillen tussen de jaren")
+
+    verschil_totaal = abs(total26 - total25)
+    verschil_gem = abs(avg26 - avg25)
+    verschil_max = abs(max26 - max25)
+
     st.markdown(f"""
-- **Totale neerslag:** verschil **{abs(total26-total25):.1f} mm**
-- **Gemiddelde dagneerslag:** verschil **{abs(avg26-avg25):.1f} mm/dag**
-- **Hoogste dagwaarde:** verschil **{abs(max26-max25):.1f} mm**
+**Belangrijkste verschillen:**
+
+- **Totale neerslag:** {wetter_year} had **{verschil_totaal:.1f} mm** meer neerslag.
+- **Gemiddelde dagneerslag:** verschil van **{verschil_gem:.1f} mm/dag**.
+- **Hoogste dagwaarde:** verschil van **{verschil_max:.1f} mm**.
+- **Dag van hoogste waarde:** 2026: dag {day_max26}, 2025: dag {day_max25}.
 """)
 
     st.markdown("## 🧾 Conclusie")
-    st.markdown(f"**{wetter_year}** was natter op station {station}.")
 
-    # Rode disclaimer
+    if wetter_year == "2026":
+        conclusie = (
+            f"{month_names[month]} van 2026 was natter dan 2025 op station {station}, "
+            f"met hogere totalen en intensievere dagpieken."
+        )
+    else:
+        conclusie = (
+            f"{month_names[month]} van 2025 was natter dan 2026 op station {station}, "
+            f"met hogere totalen en duidelijkere variatie tussen natte en drogere dagen."
+        )
+
+    st.markdown(f"**{conclusie}**")
+
     st.markdown(
         """
         <div style="
