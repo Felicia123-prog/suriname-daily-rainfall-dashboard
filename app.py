@@ -284,9 +284,6 @@ if mode == "Geheel Suriname (landelijk gemiddelde)":
 - **Hoogste dagwaarde:** verschil van **{verschil_max:.1f} mm**.
 """
     )
-
-    # Conclusie — wordt in deel 3 vervangen door de slimme versie
-    st.markdown("## 🧾 Conclusie")
     # ---------------------------------------------------------
     # SLIMME CONCLUSIE (ENIGE UPDATE DIE JE WILDE)
     # ---------------------------------------------------------
