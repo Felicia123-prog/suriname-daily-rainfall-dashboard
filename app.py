@@ -200,51 +200,35 @@ if mode == "Geheel Suriname (landelijk gemiddelde)":
                       title=f"2025 — {month_names[month]}")
         st.plotly_chart(fig2, use_container_width=True)
 
+    # ---------------------------------------------------------
+    # SLIMME CONCLUSIE UPDATE
+    # ---------------------------------------------------------
+    wet_days_2026 = (df26_daily["rr"] > 0).sum()
+    dry_days_2026 = (df26_daily["rr"] == 0).sum()
+
+    wet_days_2025 = (df25_daily["rr"] > 0).sum()
+    dry_days_2025 = (df25_daily["rr"] == 0).sum()
+
     wetter_year = "2026" if total26 > total25 else "2025"
 
-    st.markdown("## 📌 Vergelijking")
-    st.markdown(
-        f"In **{month_names[month]} 2026** viel landelijk in totaal **{total26:.1f} mm** regen. "
-        f"De regenval was redelijk gelijkmatig verdeeld, met een hoogste gemiddelde dagwaarde van **{max_avg26:.1f} mm**.\n\n"
-        f"In **{month_names[month]} 2025** bedroeg de totale neerslag **{total25:.1f} mm**, "
-        f"met een duidelijkere afwisseling tussen natte en drogere dagen. "
-        f"De hoogste gemiddelde dagwaarde lag op **{max_avg25:.1f} mm**.\n\n"
-        f"Op basis hiervan was **{wetter_year}** het nattere jaar."
-    )
-
-    season = season_from_month(month)
-    st.markdown(
-        f"🌦️ **Seizoen:** {season} — deze maand valt binnen de *{season.lower()}*, "
-        f"wat past binnen het typische regenpatroon van Suriname."
-    )
-
-    st.markdown("## ⚖️ Verschillen tussen de jaren")
-
-    verschil_totaal = abs(total26 - total25)
-    verschil_gem = abs(avg26 - avg25)
-    verschil_max = abs(max_avg26 - max_avg25)
-
-    st.markdown(f"""
-**Belangrijkste verschillen:**
-
-- **Totale neerslag:** {wetter_year} had **{verschil_totaal:.1f} mm** meer neerslag.
-- **Gemiddelde dagneerslag:** verschil van **{verschil_gem:.1f} mm/dag**.
-- **Hoogste dagwaarde:** verschil van **{verschil_max:.1f} mm**.
-""")
-
-    st.markdown("## 🧾 Conclusie")
-
-    if wetter_year == "2026":
+    if dry_days_2026 == 0 and dry_days_2025 == 0:
         conclusie = (
-            f"{month_names[month]} van 2026 was natter dan 2025, "
-            f"met hogere totalen en intensievere dagpieken."
+            f"{month_names[month]} van {wetter_year} was natter, met hogere totalen. "
+            f"In beide jaren regende het op alle dagen, zonder droge dagen."
+        )
+    elif dry_days_2026 == 0 or dry_days_2025 == 0:
+        conclusie = (
+            f"{month_names[month]} van {wetter_year} was natter. "
+            f"{'2026' if dry_days_2026 == 0 else '2025'} had regen op alle dagen, "
+            f"terwijl het andere jaar enkele droge dagen kende."
         )
     else:
         conclusie = (
-            f"{month_names[month]} van 2025 was natter dan 2026, "
-            f"met hogere totalen en duidelijkere variatie tussen natte en drogere dagen."
+            f"{month_names[month]} van {wetter_year} was natter, "
+            f"met hogere totalen en variatie tussen natte en drogere dagen."
         )
 
+    st.markdown("## 🧾 Conclusie")
     st.markdown(f"**{conclusie}**")
 
     st.markdown(
@@ -411,9 +395,4 @@ else:
             border-radius: 6px;
         ">
             <b>⚠️ Belangrijke opmerking:</b><br>
-            Sommige stations hebben ontbrekende of onvolledige data. Hierdoor kan het lijken alsof er minder regen is gevallen,
-            terwijl dit het gevolg is van datagebrek en niet van werkelijke neerslaghoeveelheden.
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+            Sommige
