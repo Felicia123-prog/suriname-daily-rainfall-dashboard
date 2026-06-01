@@ -384,15 +384,20 @@ else:
     st.markdown(f"**{conclusie}**")
 
     st.markdown(
-        """
-        <div style="
-            background-color:#ffe5e5;
-            border-left: 6px solid #cc0000;
-            padding: 15px;
-            font-size: 18px;
-            color:#990000;
-            margin-top: 25px;
-            border-radius: 6px;
-        ">
-            <b>⚠️ Belangrijke opmerking:</b><br>
-            Sommige
+    """
+<div style="
+    background-color:#ffe5e5;
+    border-left: 6px solid #cc0000;
+    padding: 15px;
+    font-size: 18px;
+    color:#990000;
+    margin-top: 25px;
+    border-radius: 6px;
+">
+    <b>⚠️ Belangrijke opmerking:</b><br>
+    Sommige stations hebben ontbrekende of onvolledige data. Hierdoor kan het lijken alsof er minder regen is gevallen,
+    terwijl dit het gevolg is van datagebrek en niet van werkelijke neerslaghoeveelheden.
+</div>
+""",
+    unsafe_allow_html=True
+)
