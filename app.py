@@ -234,48 +234,18 @@ if mode == "Geheel Suriname (landelijk gemiddelde)":
 
     st.markdown("## 🧾 Conclusie")
 
-   # Slimme conclusie op basis van natte/droge dagen
-wet_days_2026 = (df26_daily["rr"] > 0).sum()
-dry_days_2026 = (df26_daily["rr"] == 0).sum()
-
-wet_days_2025 = (df25_daily["rr"] > 0).sum()
-dry_days_2025 = (df25_daily["rr"] == 0).sum()
-
-if wetter_year == "2026":
-    if dry_days_2026 == 0 and dry_days_2025 == 0:
+    if wetter_year == "2026":
         conclusie = (
             f"{month_names[month]} van 2026 was natter dan 2025, "
-            f"met hogere totalen. Beide jaren hadden regen op alle dagen."
-        )
-    elif dry_days_2026 == 0:
-        conclusie = (
-            f"{month_names[month]} van 2026 was natter dan 2025, "
-            f"met hogere totalen. 2026 had regen op alle dagen."
-        )
-    else:
-        conclusie = (
-            f"{month_names[month]} van 2026 was natter dan 2025, "
-            f"met hogere totalen en variatie tussen natte en drogere dagen."
-        )
-else:
-    if dry_days_2026 == 0 and dry_days_2025 == 0:
-        conclusie = (
-            f"{month_names[month]} van 2025 was natter dan 2026, "
-            f"met hogere totalen. Beide jaren hadden regen op alle dagen."
-        )
-    elif dry_days_2025 == 0:
-        conclusie = (
-            f"{month_names[month]} van 2025 was natter dan 2026, "
-            f"met hogere totalen. 2025 had regen op alle dagen."
+            f"met hogere totalen en intensievere dagpieken."
         )
     else:
         conclusie = (
             f"{month_names[month]} van 2025 was natter dan 2026, "
-            f"met hogere totalen en variatie tussen natte en drogere dagen."
+            f"met hogere totalen en duidelijkere variatie tussen natte en drogere dagen."
         )
 
-st.markdown(f"**{conclusie}**")
-
+    st.markdown(f"**{conclusie}**")
 
     st.markdown(
         """
